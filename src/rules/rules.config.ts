@@ -821,3 +821,193 @@ export const PURPOSE_RULES: Record<LoanPurpose, PurposeRules> = {
  * which combination is legitimate rather than making the borrower choose.
  */
 export const PRODUCTIVE_ASSET_PURCHASE_COMBINES_BOTH = true
+
+/* =====================================================================
+ * REF - Refinance and consolidation
+ *
+ * A borrower who should not add net new debt may still be much better off
+ * restructuring what they already carry. That outcome has to be reachable
+ * on its own terms - REF-09 - rather than being a consolation line under a
+ * refusal. For a household paying 3% a month to a local lender, this
+ * section is worth more than everything above it put together.
+ * ===================================================================== */
+
+/**
+ * REF-01 - Above this all-in annual cost, existing borrowing is flagged as
+ * a refinance candidate.
+ *
+ * 24% is where formal alternatives clearly win. Credit card revolving
+ * balances and informal lending both sit well above it; bank and NBFC term
+ * credit sits below. It is a threshold, not a cliff - the size of the gap
+ * is what drives REF-06, not crossing the line.
+ */
+export const HIGH_COST_DEBT_THRESHOLD_ANNUAL_PCT: AnnualRatePct = pctPerYear(24)
+
+/**
+ * REF-02 - Informal debt is quoted per month and must be compounded, not
+ * multiplied, before it can be compared with a bank rate.
+ *
+ *   effectiveAnnual = ((1 + monthlyPct/100) ^ 12 - 1) * 100
+ *
+ * 3% a month is 42.6% a year, not 36%. The naive multiplication understates
+ * the cost of exactly the debt this section exists to find.
+ */
+export const MONTHLY_TO_ANNUAL_RATE_METHOD = 'compound' as const
+
+/**
+ * REF-03 - Blended cost of debt is the outstanding-weighted average of the
+ * effective annual rates. Weighting by balance rather than by count stops a
+ * small cheap loan from disguising a large expensive one.
+ */
+export const BLENDED_COST_WEIGHTING = 'by_outstanding_balance' as const
+
+/**
+ * REF-04 - What switching actually costs: the fee to close the old loan,
+ * plus the fee to open the new one, plus GST on both, plus any valuation or
+ * legal charge. A saving quoted without this is not a saving.
+ */
+export const SWITCHING_COST_COMPONENTS = [
+  'foreclosure_fee_on_outstanding',
+  'new_loan_processing_fee',
+  'gst_on_both_fees',
+  'new_loan_other_charges',
+] as const
+
+/**
+ * REF-05 - Foreclosure fee assumed when the borrower does not know theirs.
+ *
+ * Floating-rate term loans to individual borrowers are not supposed to
+ * carry foreclosure charges, so zero is the correct assumption there and it
+ * is not a flattering one - it is the rule. Fixed-rate loans do carry them,
+ * and the assumption there is deliberately at the top of the usual range.
+ * Both are listed in OPEN_QUESTIONS.md.
+ */
+export const FORECLOSURE_FEE_DEFAULT_PCT: Record<'floating' | 'fixed', Percent> = {
+  floating: pct(0),
+  fixed: pct(4),
+}
+
+/** REF-06 - Break-even in months: switching cost divided by monthly saving. */
+export const BREAK_EVEN_METHOD = 'switching_cost_over_monthly_saving' as const
+
+/**
+ * REF-07 - When a switch is worth making.
+ *
+ * Both tests must pass. The rate test stops churn for a saving that will be
+ * eaten by the next fee; the break-even test stops a switch that only pays
+ * back after the loan was going to end anyway.
+ */
+export const REFINANCE_WORTH_IT = {
+  minBlendedRateReductionPctPoints: pctPointsPerYear(2.0),
+  maxBreakEvenMonths: months(12),
+  maxBreakEvenAsShareOfRemainingTenure: ratio(0.3),
+}
+
+/**
+ * REF-08 - When there is a real saving but the break-even test fails, the
+ * answer is not "stay". It is to take the competing quote back to the
+ * existing lender, which costs nothing and has no break-even.
+ */
+export const RENEGOTIATE_WHEN_SAVING_EXISTS_BUT_BREAK_EVEN_FAILS = true
+
+/**
+ * REF-09 - Restructuring is reachable as an outcome in its own right.
+ *
+ * When the verdict is do_not_borrow and a refinance candidate exists, the
+ * refinance result is what the app leads with. Telling a borrower paying
+ * 42% a year that they cannot afford a new loan, without mentioning the 42%,
+ * is a technically correct answer to the wrong question.
+ */
+export const SURFACE_REFINANCE_AS_PRIMARY_WHEN_DO_NOT_BORROW = true
+
+/* =====================================================================
+ * VRD - Verdict
+ *
+ * Two loads, each a ratio of the EMI being asked for to a ceiling:
+ *
+ *   safetyLoad      = requestedEmi / safeCarryEmi        (AFF-09)
+ *   eligibilityLoad = requestedEmi / lenderEmiCeiling    (AFF-04)
+ *
+ * Both must clear 1.0. They fail for different reasons and produce
+ * different advice, which is why they are never merged into one score.
+ * ===================================================================== */
+
+/**
+ * VRD-01 - Cutoffs. Held at exactly 1.0 with no tolerance band: a 5%
+ * indulgence here would quietly become the product's real answer, and it
+ * would always be spent in the borrower's disfavour.
+ */
+export const VERDICT_CUTOFFS = {
+  borrowMaxLoad: ratio(1.0),
+  borrowLessMaxLoad: ratio(1.0),
+}
+
+/**
+ * VRD-02 - borrow_less rather than do_not_borrow whenever some smaller
+ * amount would clear both tests. The smallest amount worth arranging is the
+ * product's minimum ticket, so that is the test: if safe carry services the
+ * minimum ticket over the longest tenure available, there is a loan here.
+ */
+export const BORROW_LESS_REQUIRES_VIABLE_SMALLER_AMOUNT = true
+
+/**
+ * VRD-03 - The minimum viable EMI is derived, not stored: the EMI on the
+ * product's minimum ticket at its longest available tenure and the midpoint
+ * of the borrower's own rate band. Deriving it means a change to any of
+ * those inputs moves this too.
+ */
+export const MIN_VIABLE_EMI_METHOD = 'min_ticket_at_max_tenure_at_mid_rate' as const
+
+/**
+ * VRD-04 - Conditions that produce do_not_borrow regardless of arithmetic.
+ * Each one still has to produce actions (ACT-14).
+ */
+export const HARD_ELIGIBILITY_FAILS = [
+  'current_overdue_on_existing_credit',
+  'no_recognisable_income_for_any_product',
+  'below_minimum_entry_age',
+  'safe_carry_below_minimum_viable_emi_for_every_product',
+] as const
+
+/**
+ * VRD-05 - Failing the stress test demotes the verdict by one step. It does
+ * not zero it out: a loan that works today and breaks under a 20% income
+ * drop is a smaller loan, not no loan.
+ */
+export const STRESS_FAILURE_DEMOTES_ONE_STEP = true
+
+/**
+ * VRD-06 - The productive-income ceiling.
+ *
+ * Incremental earning may lift borrow_less to borrow. It may never lift
+ * do_not_borrow to borrow, because a household that cannot service the loan
+ * from what it has now is betting the roof on a forecast. The stress case
+ * recognises none of it (PUR-02), so a loan that only works with the
+ * offset never reaches borrow.
+ */
+export const PRODUCTIVE_OFFSET_MAX_UPGRADE = 'one_step_and_never_from_do_not_borrow' as const
+
+/**
+ * VRD-07 - What the borrower must state for a productive offset to count:
+ * what the asset earns, how many days a month it earns it, and whether that
+ * earning is already happening or is forecast. Unstated means no offset -
+ * the engine will not infer it from the purpose alone.
+ */
+export const PRODUCTIVE_OFFSET_REQUIRED_EVIDENCE = [
+  'stated_incremental_earning_inr_per_month',
+  'stated_earning_days_per_month',
+  'stated_whether_already_earning_or_projected',
+] as const
+
+/**
+ * VRD-08 - Incremental earning must clear the EMI with room to spare. An
+ * asset that earns exactly its own instalment leaves the borrower working
+ * for the lender and carrying all the risk of a slow month.
+ */
+export const PRODUCTIVE_MIN_COVERAGE_RATIO: Ratio = ratio(1.25)
+
+/**
+ * VRD-09 - A borrow_less verdict is not allowed to be a number-free
+ * disappointment. It must name the amount that does pass.
+ */
+export const BORROW_LESS_MUST_STATE_PASSING_AMOUNT = true
