@@ -27,6 +27,7 @@ import type {
   AnnualRatePct,
   Band,
   CityTier,
+  CreditScore,
   EmploymentType,
   IncomeProofType,
   LenderType,
@@ -38,6 +39,7 @@ import type {
   RupeesPerMonth,
 } from '../types'
 import {
+  creditScore,
   inr,
   inrPerMonth,
   months,
@@ -465,3 +467,188 @@ export const LENDER_TYPE_SPREAD_PCT_POINTS: Record<LenderType, Band<AnnualRatePc
   nbfc: { low: pctPointsPerYear(2.0), high: pctPointsPerYear(6.0) },
   fintech: { low: pctPointsPerYear(4.0), high: pctPointsPerYear(10.0) },
 }
+
+/* =====================================================================
+ * CRD - Credit standing
+ *
+ * The central idea in this section: an unknown score is not a bad score and
+ * it is not an average score. It is a distribution. A tool that quietly
+ * substitutes 650 for "I do not know" is inventing a fact about the
+ * borrower, and it will be wrong in both directions - it talks a prime
+ * borrower out of a rate they could get, and it lets a subprime borrower
+ * believe a number they will never be offered.
+ *
+ * So unknown maps to the union of every tier, and the width of that band is
+ * itself the message: it is wide because you have not looked, and looking
+ * is free (ACT-01).
+ * ===================================================================== */
+
+export type CreditTierId =
+  | 'prime_plus'
+  | 'prime'
+  | 'near_prime'
+  | 'subprime'
+  | 'deep_subprime'
+  | 'below_threshold'
+  | 'no_file'
+  | 'unknown'
+
+export type CreditTier = {
+  /** Inclusive lower bound of the bureau score band. `null` where not scored. */
+  minScore: CreditScore | null
+  /** Added to the product rate floor, in percentage points per annum. */
+  spreadPctPoints: Band<AnnualRatePct>
+  /** True where the band is the union of other tiers rather than a measurement. */
+  isDistribution: boolean
+  /** Unsecured products this tier can realistically reach. */
+  unsecuredAvailable: boolean
+  note: string
+}
+
+/**
+ * CRD-01 to CRD-08 - Score tiers.
+ *
+ * Ordered from best to worst. The engine walks this list and takes the
+ * first tier whose `minScore` the borrower meets.
+ */
+export const CREDIT_TIERS: Record<CreditTierId, CreditTier> = {
+  // CRD-01
+  prime_plus: {
+    minScore: creditScore(780),
+    spreadPctPoints: { low: pctPointsPerYear(0), high: pctPointsPerYear(0.75) },
+    isDistribution: false,
+    unsecuredAvailable: true,
+    note: 'Priced at or near the product floor. Has room to negotiate.',
+  },
+  // CRD-02
+  prime: {
+    minScore: creditScore(750),
+    spreadPctPoints: { low: pctPointsPerYear(0.75), high: pctPointsPerYear(2.0) },
+    isDistribution: false,
+    unsecuredAvailable: true,
+    note: 'Bank pricing available across products.',
+  },
+  // CRD-03
+  near_prime: {
+    minScore: creditScore(700),
+    spreadPctPoints: { low: pctPointsPerYear(2.0), high: pctPointsPerYear(4.5) },
+    isDistribution: false,
+    unsecuredAvailable: true,
+    note: 'Approved by most lenders, priced above the best on offer.',
+  },
+  // CRD-04
+  subprime: {
+    minScore: creditScore(650),
+    spreadPctPoints: { low: pctPointsPerYear(4.5), high: pctPointsPerYear(8.0) },
+    isDistribution: false,
+    unsecuredAvailable: true,
+    note: 'Banks may decline unsecured. NBFC pricing likely.',
+  },
+  // CRD-05
+  deep_subprime: {
+    minScore: creditScore(600),
+    spreadPctPoints: { low: pctPointsPerYear(8.0), high: pctPointsPerYear(12.0) },
+    isDistribution: false,
+    unsecuredAvailable: false,
+    note: 'Secured routes only. Unsecured pricing here rarely clears the safety test.',
+  },
+  // CRD-06
+  below_threshold: {
+    minScore: creditScore(0),
+    spreadPctPoints: { low: pctPointsPerYear(12.0), high: pctPointsPerYear(18.0) },
+    isDistribution: false,
+    unsecuredAvailable: false,
+    note: 'Formal unsecured credit is not realistically available. Repair first (ACT-03).',
+  },
+  // CRD-07 - Confirmed new to credit. Narrower than unknown, because "I
+  // checked and there is no file" is itself information.
+  no_file: {
+    minScore: null,
+    spreadPctPoints: { low: pctPointsPerYear(3.0), high: pctPointsPerYear(9.0) },
+    isDistribution: false,
+    unsecuredAvailable: true,
+    note: 'New to credit. Priced on income and stability rather than history.',
+  },
+  // CRD-08 - Not a value. The union of every scored tier above.
+  unknown: {
+    minScore: null,
+    spreadPctPoints: { low: pctPointsPerYear(0), high: pctPointsPerYear(12.0) },
+    isDistribution: true,
+    unsecuredAvailable: true,
+    note: 'Unknown is a distribution, not a default. The band spans every tier because nothing has been measured. Checking is free and narrows it to roughly 2 points (ACT-01).',
+  },
+}
+
+/**
+ * CRD-09 - The union band above is deliberately not population-weighted.
+ * Weighting it would mean inventing a distribution of Indian bureau scores
+ * that I cannot source, and dressing a guess as arithmetic.
+ */
+export const UNKNOWN_SCORE_IS_UNWEIGHTED_UNION = true
+
+export type RepaymentEvent = {
+  /** Added to the rate, in percentage points per annum. */
+  spreadPctPoints: AnnualRatePct
+  /** Months of clean conduct before the event stops binding. */
+  coolingOffMonths: Months
+  /** Whether new unsecured borrowing is available at all while it binds. */
+  unsecuredAvailable: boolean
+}
+
+/**
+ * CRD-10 to CRD-13 - Recent conduct, priced separately from the score.
+ *
+ * A bounce inside the last twelve months is more current than a score that
+ * refreshes monthly, and it is the thing a borrower can actually fix on a
+ * known timetable - which is what makes it an action (ACT-04) rather than a
+ * verdict.
+ */
+export const REPAYMENT_EVENTS: Record<
+  'one_bounce_12m' | 'two_to_three_bounces_12m' | 'four_plus_or_current_overdue' | 'settled_or_written_off',
+  RepaymentEvent
+> = {
+  // CRD-10
+  one_bounce_12m: {
+    spreadPctPoints: pctPointsPerYear(1.0),
+    coolingOffMonths: months(6),
+    unsecuredAvailable: true,
+  },
+  // CRD-11
+  two_to_three_bounces_12m: {
+    spreadPctPoints: pctPointsPerYear(2.5),
+    coolingOffMonths: months(6),
+    unsecuredAvailable: true,
+  },
+  // CRD-12 - Hard stop. Nothing new until the existing account is regular.
+  four_plus_or_current_overdue: {
+    spreadPctPoints: pctPointsPerYear(0),
+    coolingOffMonths: months(6),
+    unsecuredAvailable: false,
+  },
+  // CRD-13
+  settled_or_written_off: {
+    spreadPctPoints: pctPointsPerYear(4.0),
+    coolingOffMonths: months(24),
+    unsecuredAvailable: false,
+  },
+}
+
+/**
+ * CRD-14 - What a clean month means, so that "six clean months" is a date
+ * the borrower can put in a calendar rather than a figure of speech: a
+ * calendar month with no bounced instrument and no account moving into
+ * overdue, counted consecutively from the last such event.
+ */
+export const CLEAN_MONTH_DEFINITION = 'no_bounce_and_no_new_overdue_consecutive' as const
+
+/**
+ * CRD-15 - When a bureau score is present, an unstated bounce history is
+ * taken as none.
+ *
+ * This is the one place a zero default is allowed to sit on the borrower's
+ * side, and it is allowed because it does not flatter anybody: a bureau
+ * score already prices delinquency, so assuming bounces on top of it would
+ * charge the borrower twice for the same event. With no score present, the
+ * unknown tier is already carrying the uncertainty.
+ */
+export const UNSTATED_BOUNCES_ASSUMED_ZERO_WHEN_SCORE_KNOWN = true
