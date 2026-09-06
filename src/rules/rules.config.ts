@@ -31,12 +31,14 @@ import type {
   EmploymentType,
   IncomeProofType,
   LenderType,
+  LoanPurpose,
   Months,
   Percent,
   ProductType,
   Ratio,
   Rupees,
   RupeesPerMonth,
+  Years,
 } from '../types'
 import {
   creditScore,
@@ -47,6 +49,7 @@ import {
   pctPerYear,
   pctPointsPerYear,
   ratio,
+  years,
 } from '../units'
 /* =====================================================================
  * INC - Income recognition
@@ -652,3 +655,169 @@ export const CLEAN_MONTH_DEFINITION = 'no_bounce_and_no_new_overdue_consecutive'
  * unknown tier is already carrying the uncertainty.
  */
 export const UNSTATED_BOUNCES_ASSUMED_ZERO_WHEN_SCORE_KNOWN = true
+
+/* =====================================================================
+ * AGE - Age at maturity, and the tenure it caps
+ *
+ * Age is not a scoring input here. It binds one thing - how long the loan
+ * may run - and tenure then caps the amount that fits under any given EMI
+ * ceiling. So this section reaches the headline number by a chain rather
+ * than directly: age -> tenure -> maximum amount.
+ * ===================================================================== */
+
+/**
+ * AGE-01 - Oldest the borrower may be when the last instalment falls due.
+ *
+ * Salaried borrowers are held to a retirement date because the income
+ * stops on it. Self-employed borrowers are not, because nothing forces a
+ * shopkeeper to stop at sixty. Informal salaried and daily-wage work is
+ * capped earlier than formal employment: the work is physical, there is no
+ * pension behind it, and earning capacity falls before the calendar says
+ * it should.
+ */
+export const MAX_AGE_AT_MATURITY_BY_EMPLOYMENT: Record<EmploymentType, Years> = {
+  salaried_formal: years(60),
+  salaried_informal: years(58),
+  self_employed_documented: years(65),
+  self_employed_cash: years(65),
+  daily_wage: years(58),
+}
+
+/**
+ * AGE-02 - Product adjustment, in years. A secured long-tenure product is
+ * underwritten against the asset as much as the earner, so lenders allow a
+ * later maturity on LAP than on unsecured credit.
+ */
+export const AGE_AT_MATURITY_PRODUCT_DELTA_YEARS: Record<SupportedProduct, number> = {
+  personal: 0,
+  lap: 5,
+  business_unsecured: 0,
+  two_wheeler_ev: 0,
+}
+
+/** AGE-03 - Minimum age at which formal credit is realistically available. */
+export const MIN_ENTRY_AGE_YEARS: Years = years(21)
+
+/**
+ * AGE-04 - How the cap is applied.
+ *
+ *   maxTenure = min(productMaxTenure, (maxAgeAtMaturity - age) * 12)
+ *
+ * If that falls below the product's minimum tenure, the product is not
+ * available to this borrower at all rather than being offered at a tenure
+ * no lender would write.
+ */
+export const AGE_TENURE_CAP = {
+  method: 'min_of_product_max_and_years_to_maturity' as const,
+  unavailableIfBelowProductMinimum: true,
+}
+
+/**
+ * AGE-05 - A younger earning co-applicant may carry the maturity date,
+ * because the loan can be serviced from their income after the main
+ * applicant stops earning. This is the standard way an older borrower
+ * reaches a longer tenure, and it is an action (ACT-07), not a loophole.
+ */
+export const CO_APPLICANT_MAY_EXTEND_MATURITY = true
+
+/* =====================================================================
+ * PUR - Purpose
+ *
+ * Purpose is what makes a wedding loan and a delivery-scooter loan reach
+ * different verdicts at identical income, identical EMI and identical
+ * stress. The scooter earns; the wedding does not. Leaving that to fall out
+ * of the FOIR arithmetic would mean it never happens, because FOIR cannot
+ * see the difference.
+ * ===================================================================== */
+
+export type PurposeRules = {
+  /** May stated incremental earning be added to the safety income? */
+  allowsIncomeOffset: boolean
+  /** Of earning the borrower is already making from the same activity. */
+  existingIncrementalRecognitionRatio: Ratio
+  /** Of earning that has not started yet. Lower, because it is a forecast. */
+  projectedIncrementalRecognitionRatio: Ratio
+  /** Multiplier on the AFF-05 residual floor. Above 1.0 is a stricter test. */
+  residualFloorMultiplier: Ratio
+  /** Buffer months override, or null to use AFF-06. */
+  bufferMonthsOverride: Months | null
+  /** Added to the fair-rate ceiling before a quote is called expensive. */
+  rateToleranceExtraPctPoints: AnnualRatePct
+  /** Judged on the change in blended cost rather than on new debt (REF-*). */
+  judgedOnBlendedCostChange: boolean
+  /** The purchased asset may itself become security, changing the product. */
+  mayChangeProductSet: boolean
+  note: string
+}
+
+/** PUR-01 to PUR-05 - The taxonomy. */
+export const PURPOSE_RULES: Record<LoanPurpose, PurposeRules> = {
+  // PUR-01
+  consumption: {
+    allowsIncomeOffset: false,
+    existingIncrementalRecognitionRatio: ratio(0),
+    projectedIncrementalRecognitionRatio: ratio(0),
+    residualFloorMultiplier: ratio(1.1),
+    bufferMonthsOverride: null,
+    rateToleranceExtraPctPoints: pctPointsPerYear(0),
+    judgedOnBlendedCostChange: false,
+    mayChangeProductSet: false,
+    note: 'A wedding does not repay a loan. Nothing offsets the EMI, and the residual floor is held 10% higher because the borrower gets no new earning capacity in exchange for the obligation.',
+  },
+  // PUR-02
+  productive: {
+    allowsIncomeOffset: true,
+    existingIncrementalRecognitionRatio: ratio(0.5),
+    projectedIncrementalRecognitionRatio: ratio(0.25),
+    residualFloorMultiplier: ratio(1.0),
+    bufferMonthsOverride: null,
+    rateToleranceExtraPctPoints: pctPointsPerYear(1.5),
+    judgedOnBlendedCostChange: false,
+    mayChangeProductSet: false,
+    note: 'The asset earns. Half of earning already happening counts; a quarter of earning still forecast counts; none of it counts in the stress case (VRD-06).',
+  },
+  // PUR-03
+  refinance: {
+    allowsIncomeOffset: false,
+    existingIncrementalRecognitionRatio: ratio(0),
+    projectedIncrementalRecognitionRatio: ratio(0),
+    residualFloorMultiplier: ratio(1.0),
+    bufferMonthsOverride: null,
+    rateToleranceExtraPctPoints: pctPointsPerYear(0),
+    judgedOnBlendedCostChange: true,
+    mayChangeProductSet: false,
+    note: 'Not new debt. Judged on whether blended cost and monthly outflow fall, so the new-debt tests do not apply when outflow does not rise (REF-06).',
+  },
+  // PUR-04
+  emergency: {
+    allowsIncomeOffset: false,
+    existingIncrementalRecognitionRatio: ratio(0),
+    projectedIncrementalRecognitionRatio: ratio(0),
+    residualFloorMultiplier: ratio(1.0),
+    bufferMonthsOverride: months(1),
+    rateToleranceExtraPctPoints: pctPointsPerYear(3.0),
+    judgedOnBlendedCostChange: false,
+    mayChangeProductSet: false,
+    note: 'The buffer rule relaxes because the emergency is why the buffer is gone, and rate tolerance widens because speed has real value at a hospital counter. The safe-carry EMI test is not relaxed - the bill does not make the repayment affordable.',
+  },
+  // PUR-05
+  asset_purchase: {
+    allowsIncomeOffset: false,
+    existingIncrementalRecognitionRatio: ratio(0),
+    projectedIncrementalRecognitionRatio: ratio(0),
+    residualFloorMultiplier: ratio(1.0),
+    bufferMonthsOverride: null,
+    rateToleranceExtraPctPoints: pctPointsPerYear(0),
+    judgedOnBlendedCostChange: false,
+    mayChangeProductSet: true,
+    note: 'The thing being bought can secure the loan, which usually opens a cheaper product than the one the borrower came in asking for (RTE-03).',
+  },
+}
+
+/**
+ * PUR-06 - A productive loan that is also an asset purchase - the delivery
+ * scooter - takes the productive income rules and the asset-purchase
+ * product routing. Purpose is single-valued in the answers, so this records
+ * which combination is legitimate rather than making the borrower choose.
+ */
+export const PRODUCTIVE_ASSET_PURCHASE_COMBINES_BOTH = true
