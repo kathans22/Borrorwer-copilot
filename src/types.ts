@@ -219,3 +219,64 @@ export type CategoricalOutput<T> = {
   reasons: Reason[]
   wouldNarrow: AnswerFieldId[]
 }
+
+/* ------------------------------------------------------------------ *
+ * The result contract
+ * ------------------------------------------------------------------ */
+
+/**
+ * The headline answer. Deliberately three-valued: "borrow less" is the most
+ * common honest answer and collapsing it into yes/no is what makes generic
+ * eligibility tools useless to a borrower.
+ */
+export type VerdictValue = 'borrow' | 'borrow_less' | 'do_not_borrow'
+
+/**
+ * Something the borrower can actually do next.
+ *
+ * `changesWhat` names the effect on their own result, not a generic tip, so
+ * an action is only worth listing if the engine can say what it moves.
+ */
+export type ActionStep = {
+  text: string
+  changesWhat: string
+  timeframe: 'today' | 'weeks' | 'months'
+}
+
+/** Whether to move the loan, stay put, or push the current lender. */
+export type RefinanceVerdict = 'refinance' | 'stay' | 'renegotiate_existing'
+
+/**
+ * Only produced when the borrower already has a loan to compare against.
+ * Savings are meaningless without the switching cost that buys them, so both
+ * are reported, along with how long the borrower waits to break even.
+ */
+export type RefinanceResult = {
+  worthIt: CategoricalOutput<RefinanceVerdict>
+  monthlySaving: NumericOutput<RupeesPerMonth>
+  totalSavingOverTenure: NumericOutput<Rupees>
+  switchingCost: NumericOutput<Rupees>
+  breakEven: NumericOutput<Months>
+}
+
+/**
+ * Everything the engine produces from one set of answers.
+ *
+ * `maxAmount` holds two different numbers on purpose. What a lender will
+ * likely sanction and what the borrower can safely carry are not the same
+ * figure, and the gap between them is the point of this tool. `useWhich`
+ * records which one the app leads with, and why.
+ */
+export type CopilotResult = {
+  verdict: CategoricalOutput<VerdictValue>
+  maxAmount: {
+    lenderLikely: NumericOutput<Rupees>
+    borrowerSafe: NumericOutput<Rupees>
+    useWhich: 'lenderLikely' | 'borrowerSafe'
+    useWhichReason: Reason
+  }
+  fairRate: NumericOutput<AnnualRatePct>
+  emiCeiling: NumericOutput<RupeesPerMonth>
+  refinance: RefinanceResult | null
+  actions: ActionStep[]
+}
