@@ -357,8 +357,12 @@ export function buildMaxAmount(input: {
     wouldNarrow: safeUncertainty.wouldNarrow,
   }
 
+  // Strictly lower, not lower-or-equal. Where the two land on the same figure
+  // - both capped by what the product itself will advance - the lender is
+  // what is actually binding, and saying "a lender may offer you X, but go by
+  // X" is the kind of sentence that makes somebody stop trusting the tool.
   const useWhich: MaxAmount['useWhich'] =
-    (safeUncertainty.band.high as number) <= (lenderUncertainty.band.high as number)
+    (safeUncertainty.band.high as number) < (lenderUncertainty.band.high as number)
       ? 'borrowerSafe'
       : 'lenderLikely'
 

@@ -35,7 +35,10 @@ export type ActionContext = {
   safeAmountInr?: number
   requestedAmountInr?: number
   assumedExpensesMonthly?: number
+  /** The gap to one month of cover. Zero when they already have it. */
   bufferShortfallInr?: number
+  /** The gap to the full buffer AFF-06 asks for. */
+  bufferTargetShortfallInr?: number
   informalDebtInr?: number
   informalDebtAnnualPct?: number
   refinanceTotalSavingInr?: number
@@ -100,9 +103,17 @@ function changesWhat(id: ConstraintId, ctx: ActionContext): string {
         : fallback
 
     case 'buffer_short':
-      return ctx.bufferShortfallInr !== undefined
-        ? `You are about ${rupees(ctx.bufferShortfallInr)} short of one month of cover. That gap is the difference between a bad month being awkward and it becoming a default.`
-        : fallback
+      // Somebody who already has a month put by is not short of a month, and
+      // telling them they are short of nothing reads as a bug - because it is
+      // one. They are short of the deeper buffer their income volatility asks
+      // for, which is a different and truthful sentence.
+      if (ctx.bufferShortfallInr !== undefined && ctx.bufferShortfallInr > 0) {
+        return `You are about ${rupees(ctx.bufferShortfallInr)} short of one month of cover. That gap is the difference between a bad month being awkward and it becoming a default.`
+      }
+      if (ctx.bufferTargetShortfallInr !== undefined && ctx.bufferTargetShortfallInr > 0) {
+        return `You have a month's cover already. Building it to about ${rupees(ctx.bufferTargetShortfallInr)} more is what would let you carry this without a quiet season becoming a missed payment.`
+      }
+      return fallback
 
     case 'no_co_applicant_counted':
       return ctx.coApplicantIncomeMonthly !== undefined

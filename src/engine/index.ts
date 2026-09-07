@@ -331,6 +331,10 @@ export function computeWithTrace(raw: BorrowerAnswers): ComputeOutput {
       affordability.monthlyOutflow - affordability.household.savings,
       0,
     ),
+    bufferTargetShortfallInr: Math.max(
+      affordability.bufferTarget - affordability.household.savings,
+      0,
+    ),
     informalDebtInr: informal?.outstanding,
     informalDebtAnnualPct: informal?.annualRatePct,
     refinanceTotalSavingInr: refinance.result

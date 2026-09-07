@@ -9,7 +9,8 @@
     "typecheck": "tsc -b",
     "lint": "oxlint",
     "preview": "vite preview",
-    "personas": "tsx scripts/personas.ts"
+    "personas": "tsx scripts/personas.ts",
+    "runthroughs": "tsx scripts/runthroughs.ts"
   },
   "dependencies": {
     "react": "^19.2.8",

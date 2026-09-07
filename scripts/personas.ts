@@ -87,7 +87,7 @@ export const priya: BorrowerAnswers = {
 // 18,000 with no paperwork, which counts for the household and not for
 // the lender. He owns the shop premises outright.
 // =====================================================================
-const ravi: BorrowerAnswers = {
+export const ravi: BorrowerAnswers = {
   productType: v('business_unsecured'),
   loanPurpose: v('productive'),
   requestedAmount: { value: 1_500_000 as Rupees },
