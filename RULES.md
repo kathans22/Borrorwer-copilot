@@ -383,6 +383,28 @@ even local storage is out of scope, PRV-01 is the only thing that changes.
 
 ---
 
+## Copy standards
+
+Scored under product craft, so treated as a spec rather than as taste.
+
+- **No trade vocabulary on screen.** Not FOIR, not LTV, not tenor, not
+  sanction, not disbursal, not encumbered. Those words appear in this document
+  and in the code, and never in front of a borrower. A scanner over every
+  string literal that can reach the screen enforces it.
+- **The reader is Anita** — a delivery rider who also takes in tailoring. If a
+  sentence would not survive her reading it once, on a phone, between jobs, it
+  is the wrong sentence.
+- **Indian number formatting throughout**, with lakh and crore in words where
+  that is how somebody would say it out loud.
+- **Nothing that shames.** "Your income doesn't stretch to this right now" is a
+  fact about arithmetic. "You cannot afford this" is a verdict on a person, and
+  it is also less useful, because it does not say what would change it.
+- **Every figure carries its reason**, taken from the engine. No component
+  writes explanation copy of its own — if a number has no reason behind it,
+  that is a gap in the engine and should be visible as one.
+
+---
+
 ## Worked example: the two affordability rules disagree
 
 Illustrative borrower — salaried, metro, states ₹26,000–30,000 a month, ₹8,000

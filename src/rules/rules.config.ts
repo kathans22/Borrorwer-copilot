@@ -460,8 +460,8 @@ export const PRODUCTS: Record<SupportedProduct, ProductRules> = {
     ticketSizeInr: { low: inr(300_000), high: inr(50_000_000) },
     minRecognisedIncomeInrPerMonth: inrPerMonth(20_000),
     preconditions: [
-      'Property is unencumbered - no existing charge or mortgage',
-      'Clear, marketable title in the applicant or co-applicant name',
+      'No existing loan already secured on the property',
+      'Clear ownership papers in your name, or a co-applicant name',
       'Property is a completed, approved construction, not agricultural land',
     ],
   },
@@ -479,7 +479,7 @@ export const PRODUCTS: Record<SupportedProduct, ProductRules> = {
     ticketSizeInr: { low: inr(50_000), high: inr(5_000_000) },
     minRecognisedIncomeInrPerMonth: inrPerMonth(25_000),
     preconditions: [
-      'Business vintage of at least 24 months',
+      'Trading for at least 24 months',
       'ITR or GST returns for at least one completed year',
     ],
   },
@@ -497,7 +497,7 @@ export const PRODUCTS: Record<SupportedProduct, ProductRules> = {
     ticketSizeInr: { low: inr(30_000), high: inr(300_000) },
     minRecognisedIncomeInrPerMonth: inrPerMonth(10_000),
     preconditions: [
-      'Down payment of at least the shortfall below maximum LTV',
+      'A deposit covering whatever the loan will not',
       'Vehicle is a new purchase from a registered dealer',
     ],
   },
@@ -1353,7 +1353,7 @@ export const FIELD_DEFAULTS = {
     value: null,
     unit: 'months',
     reasonTemplate:
-      'We used the longest tenure available to you, which gives the lowest instalment and the highest total interest. Both figures are shown.',
+      'We used the longest term you can have, which gives the smallest monthly payment and the most interest paid overall. Both figures are shown.',
     rationale: 'neutral_on_eligibility',
     derivedFrom: 'the product tenure ceiling, after the age cap in AGE-04',
   },
@@ -1568,7 +1568,7 @@ export type ConstraintId =
 export const ACTION_CATALOGUE: Record<ConstraintId, ActionTemplate> = {
   // ACT-01
   credit_score_unknown: {
-    text: 'Check your credit score free on any bureau website. It takes about ten minutes and costs nothing.',
+    text: 'Check your credit score. It is free on several websites, takes about ten minutes, and costs you nothing.',
     changesWhat:
       'Your rate range is currently about twelve points wide because nothing has been measured. Knowing the score narrows it to roughly two.',
     timeframe: 'today',
@@ -1756,7 +1756,7 @@ export const REROUTE_TRADE_OFFS: Record<string, string> = {
   'personal->two_wheeler_ev':
     'The loan is tied to the vehicle and the vehicle is the security. Cheaper, but the money can only buy the vehicle.',
   'business_unsecured->personal':
-    'A smaller amount and a shorter tenure, but no business vintage or GST return needed, so it is available now rather than after a year of filings.',
+    'A smaller amount over a shorter time, but you do not need years of trading history or tax filings behind you, so it is open to you now rather than next year.',
 }
 
 /** RTE-06 - No silent rerouting, under any circumstances. */

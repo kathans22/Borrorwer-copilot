@@ -484,7 +484,7 @@ export const ADDITIONAL_QUESTIONS: Question[] = [
     appliesWhen: applies.always,
     tightens: ['emiCeiling', 'maxAmount'],
     whyWeAsk:
-      'A revolving balance costs about the same as a moneylender and is just as worth clearing first.',
+      'A balance you carry from month to month on a card costs about as much as a moneylender, and is just as worth clearing first.',
     hint: '₹',
   },
   {

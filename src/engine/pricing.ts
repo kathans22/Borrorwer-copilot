@@ -202,7 +202,7 @@ export function priceProduct(
 
   reasons.push(
     reason(
-      `The all-in cost is ${rateBandText(aprBand.low, aprBand.high)}, higher than the headline rate: a ${percent(processingFeePct)} processing fee of ${rupees(processingFeeAmount)} plus ${rupees(gstOnFees)} GST${otherCharges > 0 ? ` and ${rupees(otherCharges)} of other charges` : ''} comes out of the disbursal, so on a ${rupees(principal)} sanction you would receive ${rupees(netDisbursal)} while paying interest on the full ${rupees(principal)}.`,
+      `The all-in cost is ${rateBandText(aprBand.low, aprBand.high)}, higher than the headline rate: a ${percent(processingFeePct)} processing fee of ${rupees(processingFeeAmount)} plus ${rupees(gstOnFees)} GST${otherCharges > 0 ? ` and ${rupees(otherCharges)} of other charges` : ''} is taken out before the money reaches you. Borrow ${rupees(principal)} and you would actually receive ${rupees(netDisbursal)}, while paying interest on the whole ${rupees(principal)}.`,
       ['quotedProcessingFee', 'requestedAmount'],
     ),
   )
