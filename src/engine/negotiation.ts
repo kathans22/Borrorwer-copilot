@@ -14,10 +14,14 @@
  */
 
 import {
+  CANNOT_JUDGE_FAIRNESS_ABOVE_BAND_WIDTH_PCT_POINTS,
+  COMPARE_RUPEES_AGAINST_BEST_FAIR_RATE,
+  GST_ON_FEES_PCT,
   LENDER_QUESTIONS,
   MAX_CARD_ACTIONS,
   MAX_LENDER_QUESTIONS,
   PRODUCTS,
+  SAY_SO_WHEN_THE_OFFER_IS_FAIR,
   type SupportedProduct,
 } from '../rules/rules.config'
 import type {
@@ -32,6 +36,7 @@ import type {
 } from '../types'
 import { ALL_QUESTIONS } from '../questions/questions.config'
 import { computeWithTrace } from './index'
+import { aprFromCashFlows, emiFor } from './money'
 import { isUnanswered, readNumeric } from './resolve'
 
 /** One line of the "fair for me because..." claim. */
@@ -44,6 +49,35 @@ export type Quote = {
   annualRatePct: number
   tenureMonths: number
   processingFeePct: number
+}
+
+/**
+ * Three answers, not two. "We cannot tell yet" is the honest verdict for a
+ * borrower whose credit score has never been looked at, and pretending
+ * otherwise would be the app lending its authority to a guess.
+ */
+export type QuoteJudgement = 'fair' | 'above_fair' | 'cannot_judge_yet'
+
+export type QuoteComparison = {
+  judgement: QuoteJudgement
+  /** The quote's true cost once the fee is taken out of the money. */
+  quoteAllInPct: number
+  fairAllInBand: Band<number>
+  /** Points above the top of the fair band. Zero unless the offer is dear. */
+  gapPoints: number
+  /** What this quote costs against the best rate they should be able to get. */
+  extraVsBestInr: number
+  extraRepaidInr: number
+  extraFeeInr: number
+  /** Monthly difference against that same best rate. */
+  extraMonthlyInr: number
+  totalOnQuoteInr: number
+  totalOnBestInr: number
+  quoteEmiInr: number
+  bestEmiInr: number
+  bestRatePct: number
+  principalInr: number
+  tenureMonths: number
 }
 
 export type NegotiationCard = {
@@ -223,3 +257,81 @@ function lenderQuestions(answers: BorrowerAnswers): LenderQuestion[] {
     .map(({ question, because }) => ({ question, because }))
 }
 
+/**
+ * CARD-04 - what a quote actually costs, against what a fair one would.
+ *
+ * Same amount, same length of loan, so the two are genuinely comparable. The
+ * fee is counted as well as the rate, because it comes out of the money
+ * before it reaches the borrower - which means a lower rate with a larger
+ * fee can be the worse offer, and that is exactly the trade a counter is
+ * good at hiding.
+ */
+export function compareQuote(
+  card: NegotiationCard,
+  quote: Quote,
+  principalInr: number,
+): QuoteComparison {
+  const n = Math.max(Math.round(quote.tenureMonths), 1)
+  const p = Math.max(principalInr, 1)
+
+  // CARD-07 - the rupees are measured against the best rate this borrower
+  // should be able to get. That is the figure worth arguing over; comparing
+  // against the top of the band answers the weaker question, and for an
+  // unchecked credit score it answers nothing at all.
+  const bestRate = COMPARE_RUPEES_AGAINST_BEST_FAIR_RATE
+    ? (card.fairRateBand.low as number)
+    : (card.fairRateBand.high as number)
+  const fairFeePct = card.feeAssumption.pct
+
+  const quoteEmi = emiFor(p, quote.annualRatePct, n)
+  const bestEmi = emiFor(p, bestRate, n)
+
+  const quoteFee = feeWithTax(p, quote.processingFeePct)
+  const bestFee = feeWithTax(p, fairFeePct)
+
+  const totalOnQuote = quoteEmi * n + quoteFee
+  const totalOnBest = bestEmi * n + bestFee
+
+  const quoteAllInPct = aprFromCashFlows(p - quoteFee, quoteEmi, n)
+  const fairAllInBand = {
+    low: card.allInApr.band.low as number,
+    high: card.allInApr.band.high as number,
+  }
+
+  // CARD-06 - a band this wide cannot settle whether an offer is fair.
+  const bandWidth = fairAllInBand.high - fairAllInBand.low
+  const tooWideToJudge = bandWidth > CANNOT_JUDGE_FAIRNESS_ABOVE_BAND_WIDTH_PCT_POINTS
+  const aboveFair = quoteAllInPct > fairAllInBand.high
+
+  const judgement: QuoteJudgement = aboveFair
+    ? 'above_fair'
+    : tooWideToJudge
+      ? 'cannot_judge_yet'
+      : SAY_SO_WHEN_THE_OFFER_IS_FAIR
+        ? 'fair'
+        : 'cannot_judge_yet'
+
+  return {
+    judgement,
+    quoteAllInPct,
+    fairAllInBand,
+    gapPoints: Math.max(quoteAllInPct - fairAllInBand.high, 0),
+    extraRepaidInr: Math.max(quoteEmi * n - bestEmi * n, 0),
+    extraFeeInr: Math.max(quoteFee - bestFee, 0),
+    extraMonthlyInr: Math.max(quoteEmi - bestEmi, 0),
+    extraVsBestInr: Math.max(totalOnQuote - totalOnBest, 0),
+    totalOnQuoteInr: totalOnQuote,
+    totalOnBestInr: totalOnBest,
+    quoteEmiInr: quoteEmi,
+    bestEmiInr: bestEmi,
+    bestRatePct: bestRate,
+    principalInr: p,
+    tenureMonths: n,
+  }
+}
+
+/** The fee as the borrower actually pays it: the charge plus tax on it (PRD-07). */
+function feeWithTax(principal: number, feePct: number): number {
+  const fee = principal * (feePct / 100)
+  return fee * (1 + (GST_ON_FEES_PCT as number) / 100)
+}

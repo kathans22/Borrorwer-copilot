@@ -13,13 +13,19 @@
  * negotiation.
  */
 
-import { buildNegotiationCard } from '../engine/negotiation'
+import { useState } from 'react'
+import {
+  buildNegotiationCard,
+  compareQuote,
+  type Quote,
+} from '../engine/negotiation'
 import type { BorrowerAnswers } from '../types'
 import { timeframeWords } from './copy'
-import { duration, moneyBand, percent, percentBand } from './format'
+import { duration, money, moneyBand, percent, percentBand } from './format'
 
 export function Card({ answers, onBack }: { answers: BorrowerAnswers; onBack: () => void }) {
   const card = buildNegotiationCard(answers)
+  const principal = card.safeAmount.band.high as number
 
   return (
     <div className="space-y-5">
@@ -90,6 +96,8 @@ export function Card({ answers, onBack }: { answers: BorrowerAnswers; onBack: ()
         </p>
       </section>
 
+      <Comparator card={card} principal={principal} />
+
       <section className="rounded-2xl border border-stone-200 bg-white p-4">
         <h2 className="text-base font-semibold text-stone-900">What I will ask you</h2>
         <ol className="mt-3 space-y-3">
@@ -138,3 +146,132 @@ function Headline({ label, value, note }: { label: string; value: string; note: 
   )
 }
 
+/**
+ * The quote comparator.
+ *
+ * Pre-filled when the borrower already told us about an offer, and editable
+ * either way, because the real use of this is standing at a counter typing in
+ * what has just been said out loud.
+ */
+function Comparator({
+  card,
+  principal,
+}: {
+  card: ReturnType<typeof buildNegotiationCard>
+  principal: number
+}) {
+  const [quote, setQuote] = useState<Quote>(
+    card.prefilledQuote ?? {
+      annualRatePct: 0,
+      tenureMonths: card.tenureMonths,
+      processingFeePct: card.feeAssumption.pct,
+    },
+  )
+
+  const ready = quote.annualRatePct > 0 && quote.tenureMonths > 0
+  const c = ready ? compareQuote(card, quote, principal) : null
+
+  return (
+    <section className="rounded-2xl border-2 border-teal-700 bg-teal-50 p-4">
+      <h2 className="text-base font-semibold text-stone-900">Check an offer against this</h2>
+      <p className="mt-1 text-sm text-stone-600">
+        Type in what they just told you. Nothing leaves this phone.
+      </p>
+
+      <div className="mt-3 grid grid-cols-3 gap-2">
+        <Field
+          label="Their rate"
+          suffix="%"
+          value={quote.annualRatePct}
+          onChange={(n) => setQuote({ ...quote, annualRatePct: n })}
+        />
+        <Field
+          label="Months"
+          value={quote.tenureMonths}
+          onChange={(n) => setQuote({ ...quote, tenureMonths: n })}
+        />
+        <Field
+          label="Their fee"
+          suffix="%"
+          value={quote.processingFeePct}
+          onChange={(n) => setQuote({ ...quote, processingFeePct: n })}
+        />
+      </div>
+
+      {c && (
+        <div className="mt-4 border-t border-teal-200 pt-4">
+          <p className="text-sm text-stone-700">
+            Their true yearly cost, once the fee is counted:{' '}
+            <strong className="text-stone-900">{percent(c.quoteAllInPct)}</strong>
+          </p>
+
+          {c.judgement === 'fair' && (
+            <p className="mt-3 text-base font-medium leading-relaxed text-emerald-900">
+              This is a fair offer. It sits inside what someone in your position should be paying,
+              and there is nothing here worth arguing about.
+            </p>
+          )}
+
+          {c.judgement === 'cannot_judge_yet' && (
+            <p className="mt-3 text-base leading-relaxed text-stone-800">
+              We cannot tell you whether this is a fair price yet — your credit score has not been
+              checked, so the range of what you might fairly be offered is too wide to judge against.
+              Checking it is free, and it is the single thing that would settle this.
+            </p>
+          )}
+
+          {c.judgement === 'above_fair' && (
+            <p className="mt-3 text-base font-medium leading-relaxed text-stone-900">
+              This is {percent(c.gapPoints)} above the most you should be paying.
+            </p>
+          )}
+
+          {c.extraVsBestInr > 0 && (
+            <div className="mt-3 rounded-xl bg-white p-3">
+              <p className="text-3xl font-bold leading-tight text-stone-900">
+                {money(c.extraVsBestInr)}
+              </p>
+              <p className="mt-1 text-sm leading-relaxed text-stone-700">
+                more than the best rate you should be able to get ({percent(c.bestRatePct)}), over{' '}
+                {duration(c.tenureMonths)}. That is {money(c.extraMonthlyInr)} a month —{' '}
+                {money(c.quoteEmiInr)} instead of {money(c.bestEmiInr)}.
+              </p>
+            </div>
+          )}
+
+          <p className="mt-3 text-xs leading-relaxed text-stone-500">
+            Worked out on {money(c.principalInr)} over {duration(c.tenureMonths)}, comparing the same
+            amount and the same length of loan, and counting both fees.
+          </p>
+        </div>
+      )}
+    </section>
+  )
+}
+
+function Field({
+  label,
+  value,
+  suffix,
+  onChange,
+}: {
+  label: string
+  value: number
+  suffix?: string
+  onChange: (n: number) => void
+}) {
+  return (
+    <label className="block">
+      <span className="mb-1 block text-xs text-stone-600">{label}</span>
+      <div className="flex items-center rounded-xl border border-stone-300 bg-white px-2">
+        <input
+          inputMode="decimal"
+          value={value === 0 ? '' : String(value)}
+          onChange={(e) => onChange(Number(e.target.value.replace(/[^0-9.]/g, '')) || 0)}
+          className="min-h-11 w-full bg-transparent py-2 text-base outline-none"
+        />
+        {suffix && <span className="text-sm text-stone-500">{suffix}</span>}
+      </div>
+    </label>
+  )
+}
