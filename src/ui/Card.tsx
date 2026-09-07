@@ -15,7 +15,8 @@
 
 import { buildNegotiationCard } from '../engine/negotiation'
 import type { BorrowerAnswers } from '../types'
-import { percent, percentBand } from './format'
+import { timeframeWords } from './copy'
+import { duration, moneyBand, percent, percentBand } from './format'
 
 export function Card({ answers, onBack }: { answers: BorrowerAnswers; onBack: () => void }) {
   const card = buildNegotiationCard(answers)
@@ -41,6 +42,19 @@ export function Card({ answers, onBack }: { answers: BorrowerAnswers; onBack: ()
             label="A fair rate for me"
             value={percentBand(card.fairRateBand.low as number, card.fairRateBand.high as number)}
             note="a year, before fees"
+          />
+          {/* Both render as ranges because the engine returned ranges. A
+              single figure here would be a decision the arithmetic did not
+              make, on the one screen where being wrong is most expensive. */}
+          <Headline
+            label="What I can pay each month"
+            value={moneyBand(card.maxEmi.band.low as number, card.maxEmi.band.high as number)}
+            note="I will not agree to go past the top of this"
+          />
+          <Headline
+            label="What I am asking to borrow"
+            value={moneyBand(card.safeAmount.band.low as number, card.safeAmount.band.high as number)}
+            note={`what my household can carry over ${duration(card.tenureMonths)}`}
           />
         </div>
       </section>
@@ -75,6 +89,23 @@ export function Card({ answers, onBack }: { answers: BorrowerAnswers; onBack: ()
             : `I am assuming a ${percent(card.feeAssumption.pct)} fee plus tax, taken out before the money reaches me. If yours is different, tell me and I will work it out again.`}
         </p>
       </section>
+
+      {card.actions.length > 0 && (
+        <section className="rounded-2xl border border-stone-200 bg-white p-4">
+          <h2 className="text-base font-semibold text-stone-900">Before I sign anything</h2>
+          <ul className="mt-3 space-y-3">
+            {card.actions.map((a, i) => (
+              <li key={i}>
+                <p className="text-base leading-snug text-stone-900">{a.text}</p>
+                <p className="mt-1 text-sm text-stone-600">{a.changesWhat}</p>
+                <p className="mt-1 text-xs uppercase tracking-wide text-stone-500">
+                  {timeframeWords(a.timeframe)}
+                </p>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       <p className="pb-4 text-center text-xs text-stone-400 print:hidden">
         These are my own figures, worked out before I came in.
