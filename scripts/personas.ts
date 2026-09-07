@@ -12,6 +12,7 @@ import { computeWithTrace } from '../src/engine/index'
 import { percent, rupees, months as monthsText } from '../src/engine/format'
 import { bareLabel } from '../src/engine/productRouting'
 import type {
+  AnswerFieldId,
   BorrowerAnswers,
   Count,
   CreditScore,
@@ -280,10 +281,160 @@ function run(name: string, answers: BorrowerAnswers): void {
   })
 }
 
-run('Priya', priya)
-run('Ravi', ravi)
-run('Anita', anita)
+// =====================================================================
+// --compare : must-questions only, against everything answered
+//
+// The claim being tested is that answering a question can only ever narrow
+// a band, never widen one. If that fails, the widening table is doing
+// something other than what it says it does.
+// =====================================================================
 
-console.log('\n' + rule('='))
-console.log('  done')
-console.log(rule('=') + '\n')
+/**
+ * The opening questions - what the tool would ask before it could say
+ * anything at all. Prompt 5 builds the real question graph and will own
+ * this list; until then it lives here so the comparison has something to
+ * compare against.
+ */
+const MUST_FIELDS: AnswerFieldId[] = [
+  'productType',
+  'loanPurpose',
+  'requestedAmount',
+  'age',
+  'cityTier',
+  'employmentType',
+  'incomeProof',
+  'salariedNetIncomeMonthly',
+  'cashIncomeMonthly',
+]
+
+function mustOnly(answers: BorrowerAnswers): BorrowerAnswers {
+  const out: Record<string, unknown> = {}
+  for (const field of MUST_FIELDS) {
+    if (answers[field] !== undefined) out[field] = answers[field]
+  }
+  return out as BorrowerAnswers
+}
+
+type BandRow = { label: string; low: number; high: number; isRate: boolean }
+
+function bandsOf(answers: BorrowerAnswers): BandRow[] {
+  const { result } = computeWithTrace(answers)
+  return [
+    {
+      label: 'maxAmount.lenderLikely',
+      low: result.maxAmount.lenderLikely.band.low as number,
+      high: result.maxAmount.lenderLikely.band.high as number,
+      isRate: false,
+    },
+    {
+      label: 'maxAmount.borrowerSafe',
+      low: result.maxAmount.borrowerSafe.band.low as number,
+      high: result.maxAmount.borrowerSafe.band.high as number,
+      isRate: false,
+    },
+    {
+      label: 'fairRate (all-in APR)',
+      low: result.fairRate.band.low as number,
+      high: result.fairRate.band.high as number,
+      isRate: true,
+    },
+    {
+      label: 'emiCeiling',
+      low: result.emiCeiling.band.low as number,
+      high: result.emiCeiling.band.high as number,
+      isRate: false,
+    },
+  ]
+}
+
+/**
+ * CONF-01's own metric: span over midpoint.
+ *
+ * The test is on relative width rather than absolute, because absolute width
+ * has to grow with the size of the number. A borrower whose safe amount moves
+ * from nothing to two lakh gets a wider rupee span around it and is not
+ * thereby less understood. What must never get worse is how much of the
+ * number is uncertainty, and that is what this measures.
+ */
+function relWidth(b: BandRow): number {
+  const centre = (b.low + b.high) / 2
+  if (centre === 0) return b.high === b.low ? 0 : Number.POSITIVE_INFINITY
+  return Math.abs(b.high - b.low) / Math.abs(centre)
+}
+
+function compare(name: string, answers: BorrowerAnswers): boolean {
+  const partial = mustOnly(answers)
+  const before = bandsOf(partial)
+  const after = bandsOf(answers)
+  const t0 = computeWithTrace(partial).trace
+  const t1 = computeWithTrace(answers).trace
+
+  heading(name + ' - must-questions only, then everything')
+  console.log(
+    '  widening applied    maxAmount %s -> %s    fairRate %s -> %s    emiCeiling %s -> %s',
+    percent(t0.widening.maxAmount * 100, 0),
+    percent(t1.widening.maxAmount * 100, 0),
+    percent(t0.widening.fairRate * 100, 0),
+    percent(t1.widening.fairRate * 100, 0),
+    percent(t0.widening.emiCeiling * 100, 0),
+    percent(t1.widening.emiCeiling * 100, 0),
+  )
+  console.log('  credit tier         %s -> %s', t0.pricing?.creditTier ?? '-', t1.pricing?.creditTier ?? '-')
+  console.log('  routed product      %s -> %s', t0.ranking.routedProduct ?? '-', t1.ranking.routedProduct ?? '-')
+  console.log()
+  console.log('  band                        must-only            answered      uncertainty')
+  console.log('  ' + rule().slice(2))
+
+  let allNarrow = true
+  before.forEach((b, i) => {
+    const a = after[i]!
+    const fmt = (x: number) => (b.isRate ? percent(x) : rupees(x))
+    const ok = relWidth(a) <= relWidth(b) + 1e-9
+    if (!ok) allNarrow = false
+    console.log(
+      '  %s %s %s %s',
+      b.label.padEnd(24),
+      (fmt(b.low) + '-' + fmt(b.high)).padStart(20),
+      (fmt(a.low) + '-' + fmt(a.high)).padStart(20),
+      (ok ? 'narrows' : 'WIDENS').padStart(12),
+    )
+    console.log(
+      '  %s %s %s',
+      ''.padEnd(24),
+      ('+/-' + (relWidth(b) * 50).toFixed(0) + '% of centre').padStart(20),
+      ('+/-' + (relWidth(a) * 50).toFixed(0) + '% of centre').padStart(20),
+    )
+  })
+  console.log()
+  console.log(
+    '  ' +
+      (allNarrow
+        ? 'PASS - no band grew more uncertain as answers were added'
+        : 'FAIL - a band grew more uncertain'),
+  )
+  return allNarrow
+}
+
+if (process.argv.slice(2).includes('--compare')) {
+  const results = [compare('Priya', priya), compare('Ravi', ravi), compare('Anita', anita)]
+  console.log()
+  console.log(rule('='))
+  if (results.every(Boolean)) {
+    console.log('  every band narrowed or held as answers were added.')
+  } else {
+    console.log('  a band WIDENED when an answer was added. rule 1 is broken.')
+    process.exitCode = 1
+  }
+  console.log(rule('='))
+  console.log()
+} else {
+  run('Priya', priya)
+  run('Ravi', ravi)
+  run('Anita', anita)
+
+  console.log()
+  console.log(rule('='))
+  console.log('  done')
+  console.log(rule('='))
+  console.log()
+}
