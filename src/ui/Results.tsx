@@ -13,6 +13,7 @@ import { computeWithTrace } from '../engine/index'
 import type { BorrowerAnswers } from '../types'
 import { LABELS } from './copy'
 import { Button } from './primitives'
+import { MaxAmount } from './results/MaxAmount'
 import { Verdict } from './results/Verdict'
 
 export function Results({
@@ -32,6 +33,7 @@ export function Results({
 
       {/* A refusal without a path is the failure this whole thing exists to
           avoid, so the next steps come first when the answer is no. */}
+      <MaxAmount result={result} />
 
       <div className="space-y-3 border-t border-stone-200 pt-6">
         <Button onClick={onBack} variant="secondary">
