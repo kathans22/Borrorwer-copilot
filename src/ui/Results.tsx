@@ -14,6 +14,8 @@ import type { BorrowerAnswers } from '../types'
 import { LABELS } from './copy'
 import { Button } from './primitives'
 import { MaxAmount } from './results/MaxAmount'
+import { Monthly } from './results/Monthly'
+import { Pricing } from './results/Pricing'
 import { Verdict } from './results/Verdict'
 
 export function Results({
@@ -25,7 +27,7 @@ export function Results({
   onBack: () => void
   onClear: () => void
 }) {
-  const { result } = computeWithTrace(answers)
+  const { result, trace } = computeWithTrace(answers)
 
   return (
     <div className="space-y-6">
@@ -34,6 +36,8 @@ export function Results({
       {/* A refusal without a path is the failure this whole thing exists to
           avoid, so the next steps come first when the answer is no. */}
       <MaxAmount result={result} />
+      <Pricing result={result} trace={trace} />
+      <Monthly result={result} trace={trace} />
 
       <div className="space-y-3 border-t border-stone-200 pt-6">
         <Button onClick={onBack} variant="secondary">
