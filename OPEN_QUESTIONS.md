@@ -63,14 +63,20 @@ in RULES.md they are the difference between a ₹12,700 answer and a ₹2,950 on
 | AGE-03 | Minimum entry age 21 | Whether 18 is workable for any product here. |
 | AGE-05 | A younger co-applicant can carry the maturity date | Whether lenders actually allow this, since ACT-11 recommends it. |
 
-## 6. Regulatory
+## 6. Existing debt
+
+| Rule | Value assumed | What I would check |
+|---|---|---|
+| REF-10 | A revolving card balance costs 42% a year when the borrower has not stated it | Published card rates and how quickly a balance actually compounds. It drives whether a card balance is flagged as refinance-first debt, so being wrong changes what Priya and Anita are told to deal with first. |
+
+## 7. Regulatory
 
 | Rule | Value assumed | What I would check |
 |---|---|---|
 | REF-05 | No foreclosure charge on floating-rate term loans to individual borrowers; 4% assumed on fixed-rate | I have stated this as a principle without citing an instrument, because I will not invent a circular number. It needs checking against the actual regulation, including whether it covers LAP and whether it covers non-individual borrowers. |
 | APR-04 | Bundled credit insurance excluded from APR | Whether it can be estimated at all. If it can, it belongs in the APR, because it is money the borrower pays to get the loan. |
 
-## 7. Stress
+## 8. Stress
 
 | Rule | Value assumed | What I would check |
 |---|---|---|
@@ -82,14 +88,47 @@ in RULES.md they are the difference between a ₹12,700 answer and a ₹2,950 on
 ## Questions sent to Lokta on day one
 
 Asked before any code was written, each with a working assumption so that
-nothing was blocked waiting for an answer. Current status:
+nothing was blocked waiting for an answer. All four were built on the stated
+assumption; none of them is expensive to reverse. Current status:
 
 | Question | Working assumption | Where it shows up |
 |---|---|---|
-| Does "no personal data stored" preclude client-side session persistence, or only server-side? | Local-only is fine, with an explicit "clear my answers" control and nothing leaving the browser | Not yet built — affects the UI phase |
-| Should the fair-rate band be segmented by lender type, or a single market-wide band per product? | Segmented, with the market-wide band as the union, used when no lender is named | PRD-08 |
-| Is a co-applicant flow in scope? | In scope, as an optional second income block through the same recognition rules | INC-08 to INC-11, ACT-06, AGE-05 |
-| Should the Negotiation Card be exportable, or is on-screen enough? | On-screen first, with print-to-PDF styling rather than a new dependency | Not yet built |
+| Does "no personal data stored" preclude client-side session persistence, or only server-side? | Local-only is fine, with an explicit "clear my answers" control and nothing leaving the browser | **Built on that assumption.** PRV-01 to PRV-03. Answers sit in browser storage, one visible control clears them, and there are no network calls at runtime. If the answer comes back differently, PRV-01 is the only thing that changes. |
+| Should the fair-rate band be segmented by lender type, or a single market-wide band per product? | Segmented, with the market-wide band as the union, used when no lender is named | **Built on that assumption.** PRD-08. Reversing it means deleting one table. |
+| Is a co-applicant flow in scope? | In scope, as an optional second income block through the same recognition rules | **Built on that assumption.** INC-08 to INC-11, ACT-06, AGE-05. It matters: Ravi's wife earns ₹18,000 and leaving her out would understate his household by nearly a third. |
+| Should the Negotiation Card be exportable, or is on-screen enough? | On-screen first, with print-to-PDF styling rather than a new dependency | **Built on that assumption.** The card is at `/card`, fits a 380px screen without scrolling for the headline figures, and hides its navigation when printed. No export dependency was added. |
 
 If any of these comes back differently, the affected rules are the ones named
 in the last column and nothing else needs to move.
+
+---
+
+## Added after the rules phase
+
+The list above was written when the rules layer was first built. The engine,
+the uncertainty layer, the question graph and the negotiation card each added
+values afterwards. These are the ones a reviewer should push on, and they are
+judgement rather than market observation — there is no source to check them
+against, only an argument to have.
+
+| Rule | Value | The argument to have |
+|---|---|---|
+| WID-01 | Twelve widening factors on `maxAmount`, ten on `emiCeiling`, six on `fairRate` | I can defend the *ordering* — income documentation moves the lender numbers more than the number of dependants does — but not each individual figure. A smaller set of larger, better-argued factors would behave almost identically and be easier to defend. |
+| WID-03 | Total widening capped at 0.9 of the centre | Round number. The right value is wherever a band stops being informative, which I have not tested. |
+| WID-05 | Uncertainty never finer than 15% of monthly income | Invented to stop a floored safe-carry reporting itself as certain. The mechanism is right; the fraction is a guess. |
+| CONF-02 | High below 0.20 relative width, medium below 0.55 | Where "useful answer" becomes "we are guessing". Entirely a judgement about how much uncertainty a reader tolerates. |
+| CARD-06 | Cannot judge fairness above a 6-point band | Chosen so that an unchecked credit score fails and a checked one passes. Defensible in that it does the right thing for both cases, but the number itself is fitted to the outcome. |
+| AFF-16 | Upcoming lump spread over 12 months | Why a year and not the actual date of the expense? Because we do not ask for the date. Asking would be better. |
+| DEF-03 | Unstated obligations default to 5% of income | Zero is wrong, and I argue that in RULES.md. 5% is arbitrary. |
+| DEF-24 | Assumed income proof from employment type | Assuming bank statements for everybody but the formally salaried is a real choice about who gets the benefit of the doubt. A stricter reading would assume nothing and produce no answer, which is why it exists. |
+| VRD-08 | Incremental earning must cover the payment 1.25 times | The idea is sound — an asset earning exactly its own instalment moves all the risk to the borrower. The multiple is mine. |
+| INC-14 | Stated guaranteed income overrides the range floor | Sound in principle. Worth asking whether borrowers actually answer "what comes in even in a bad month" accurately, or optimistically. |
+
+## Questions I would ask a lending team
+
+Not values to verify — things I could not work out from the outside.
+
+1. Do lenders treat declared income as a hard cap (INC-12), or as one input among several for a self-employed applicant with strong bank flows?
+2. Is a residual-income test (AFF-05) used anywhere in unsecured lending in India, or is FOIR genuinely the whole affordability picture?
+3. What actually happens to an application where the co-applicant's income is undocumented — is it excluded, discounted, or does it disqualify the file?
+4. How much does a rejected application cost the next one? We tell borrowers to wait rather than apply, and I have assumed that is right without knowing how heavily enquiries are weighted.
