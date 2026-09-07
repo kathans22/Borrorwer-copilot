@@ -90,6 +90,20 @@ export function Card({ answers, onBack }: { answers: BorrowerAnswers; onBack: ()
         </p>
       </section>
 
+      <section className="rounded-2xl border border-stone-200 bg-white p-4">
+        <h2 className="text-base font-semibold text-stone-900">What I will ask you</h2>
+        <ol className="mt-3 space-y-3">
+          {card.questions.map((q, i) => (
+            <li key={i}>
+              <p className="text-base font-medium leading-snug text-stone-900">
+                {i + 1}. {q.question}
+              </p>
+              <p className="mt-1 text-sm text-stone-500">{q.because}</p>
+            </li>
+          ))}
+        </ol>
+      </section>
+
       {card.actions.length > 0 && (
         <section className="rounded-2xl border border-stone-200 bg-white p-4">
           <h2 className="text-base font-semibold text-stone-900">Before I sign anything</h2>

@@ -14,21 +14,25 @@
  */
 
 import {
+  LENDER_QUESTIONS,
   MAX_CARD_ACTIONS,
+  MAX_LENDER_QUESTIONS,
   PRODUCTS,
   type SupportedProduct,
 } from '../rules/rules.config'
 import type {
   ActionStep,
   AnnualRatePct,
+  AnswerFieldId,
   Band,
   BorrowerAnswers,
   NumericOutput,
   Rupees,
   RupeesPerMonth,
 } from '../types'
+import { ALL_QUESTIONS } from '../questions/questions.config'
 import { computeWithTrace } from './index'
-import { readNumeric } from './resolve'
+import { isUnanswered, readNumeric } from './resolve'
 
 /** One line of the "fair for me because..." claim. */
 export type ClaimFactor = { label: string; value: string }
@@ -84,7 +88,7 @@ export function buildNegotiationCard(answers: BorrowerAnswers): NegotiationCard 
     maxEmi: result.emiCeiling,
     safeAmount: result.maxAmount.borrowerSafe,
     lenderAmount: result.maxAmount.lenderLikely,
-    questions: [],
+    questions: lenderQuestions(answers),
     actions: result.actions.slice(0, MAX_CARD_ACTIONS),
     prefilledQuote: quotedRate?.stated
       ? {
@@ -196,4 +200,26 @@ function describeSecurity(product: SupportedProduct): string {
   }
 }
 
+/**
+ * CARD-01 - three questions, drawn from what this borrower has not been able
+ * to tell us. A gap in our answers is usually a gap the lender is relying on.
+ */
+function lenderQuestions(answers: BorrowerAnswers): LenderQuestion[] {
+  // A gap only counts if the question behind it applies to this borrower.
+  // Asking somebody with no property what valuation the lender is using is
+  // the sort of thing that makes a card get put back in a pocket.
+  const askable = new Set(
+    ALL_QUESTIONS.filter((q) => q.appliesWhen(answers)).map((q) => q.id),
+  )
+  const fromGaps = LENDER_QUESTIONS.filter(
+    (q) =>
+      q.gap !== null &&
+      askable.has(q.gap as AnswerFieldId) &&
+      isUnanswered(answers, q.gap as AnswerFieldId),
+  )
+  const always = LENDER_QUESTIONS.filter((q) => q.gap === null)
+  return [...fromGaps, ...always]
+    .slice(0, MAX_LENDER_QUESTIONS)
+    .map(({ question, because }) => ({ question, because }))
+}
 
