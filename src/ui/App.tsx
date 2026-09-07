@@ -11,6 +11,7 @@
 import { useState } from 'react'
 import type { BorrowerAnswers } from '../types'
 import { Intro } from './Intro'
+import { Results } from './Results'
 import { Wizard } from './Wizard'
 import type { AnswerValue } from './QuestionInput'
 
@@ -47,6 +48,9 @@ export function App() {
           />
         )}
 
+        {screen === 'results' && (
+          <Results answers={answers} onBack={() => setScreen('wizard')} onClear={handleClear} />
+        )}
       </main>
     </div>
   )
