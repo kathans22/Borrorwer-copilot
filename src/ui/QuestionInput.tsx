@@ -5,10 +5,16 @@
  * there puts it on screen with no edit here. That is the whole point of
  * questions being data - the interface walks the graph, it does not encode
  * it.
+ *
+ * "I don't know" is rendered as a full-width option the same size as every
+ * real answer. It is a genuine answer that the engine treats differently
+ * from silence, and burying it in small grey text would quietly push people
+ * into guessing - which is worse for them and worse for the numbers.
  */
 
 import { useState } from 'react'
 import type { Question } from '../questions/questions.config'
+import { LABELS } from './copy'
 
 export type AnswerValue =
   | { value: string | number | boolean }
@@ -30,6 +36,16 @@ export function QuestionInput({
         <NumberInput question={question} onAnswer={onAnswer} />
       )}
       {question.inputType === 'range' && <RangeInput onAnswer={onAnswer} />}
+
+      {question.allowUnknown && (
+        <button
+          type="button"
+          onClick={() => onAnswer({ unknown: true })}
+          className="min-h-12 w-full rounded-xl border border-dashed border-stone-400 bg-stone-50 px-4 py-3 text-base font-medium text-stone-700"
+        >
+          {LABELS.dontKnow}
+        </button>
+      )}
     </div>
   )
 }

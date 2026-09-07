@@ -55,6 +55,14 @@ export function Wizard({
 
       <div>
         <h1 className="text-xl font-semibold leading-snug text-stone-900">{question.prompt}</h1>
+        <details className="mt-2">
+          <summary className="cursor-pointer list-none text-sm font-medium text-teal-800 underline decoration-dotted underline-offset-4">
+            {LABELS.whyWeAsk}
+          </summary>
+          <p className="mt-2 border-l-2 border-stone-200 pl-3 text-sm leading-relaxed text-stone-600">
+            {question.whyWeAsk}
+          </p>
+        </details>
       </div>
 
       <QuestionInput question={question} onAnswer={(a) => onAnswer(question.id, a)} />
