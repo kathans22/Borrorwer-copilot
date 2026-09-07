@@ -224,7 +224,7 @@ export const MUST_QUESTIONS: Question[] = [
     prompt: 'What do you take home each month, after deductions?',
     inputType: 'currency',
     allowUnknown: false,
-    appliesWhen: applies.always,
+    appliesWhen: (a) => !applies.isSelfEmployed(a) && employment(a) !== 'daily_wage',
     tightens: ['maxAmount', 'emiCeiling'],
     whyWeAsk: 'Take-home pay, not gross. Lenders work from what actually reaches you.',
     hint: '₹ per month',
@@ -235,7 +235,7 @@ export const MUST_QUESTIONS: Question[] = [
     prompt: 'What does the work bring in each month?',
     inputType: 'range',
     allowUnknown: false,
-    appliesWhen: applies.always,
+    appliesWhen: (a) => applies.isSelfEmployed(a) || employment(a) === 'daily_wage',
     tightens: ['maxAmount', 'emiCeiling'],
     whyWeAsk:
       'A range is fine and more useful than a single figure — we treat the two ends differently on purpose.',
@@ -325,7 +325,7 @@ export const ADDITIONAL_QUESTIONS: Question[] = [
     prompt: 'Of that, how much comes in even in a bad month?',
     inputType: 'currency',
     allowUnknown: false,
-    appliesWhen: applies.always,
+    appliesWhen: applies.hasVariableIncome,
     tightens: ['emiCeiling', 'maxAmount'],
     whyWeAsk:
       'Otherwise we have to guess where the bottom of your range is. You know, and your answer replaces our guess.',
@@ -337,7 +337,7 @@ export const ADDITIONAL_QUESTIONS: Question[] = [
     prompt: 'What income does your last filed return show?',
     inputType: 'currency',
     allowUnknown: true,
-    appliesWhen: applies.always,
+    appliesWhen: applies.isSelfEmployed,
     tightens: ['maxAmount', 'emiCeiling'],
     whyWeAsk:
       'A lender cannot count more than you have declared, so this often sets the ceiling — even where the business takes more.',
@@ -377,6 +377,7 @@ export const ADDITIONAL_QUESTIONS: Question[] = [
     inputType: 'boolean',
     allowUnknown: false,
     appliesWhen: applies.always,
+    gateFor: 'coApplicantIncomeMonthly',
     tightens: ['maxAmount', 'emiCeiling'],
     whyWeAsk:
       'Adding an earning co-applicant usually raises what a lender will offer more than anything else you can do quickly.',
@@ -387,7 +388,7 @@ export const ADDITIONAL_QUESTIONS: Question[] = [
     prompt: 'What do they earn each month?',
     inputType: 'currency',
     allowUnknown: false,
-    appliesWhen: applies.always,
+    appliesWhen: applies.hasCoApplicant,
     tightens: ['maxAmount', 'emiCeiling'],
     whyWeAsk:
       'It counts towards what your household can carry either way. Whether it counts towards what a lender will lend depends on the next question.',
@@ -399,7 +400,7 @@ export const ADDITIONAL_QUESTIONS: Question[] = [
     prompt: 'Can they prove that income on paper?',
     inputType: 'select',
     allowUnknown: false,
-    appliesWhen: applies.always,
+    appliesWhen: applies.hasCoApplicant,
     tightens: ['maxAmount'],
     whyWeAsk:
       'Undocumented income still feeds your household. It does not feed the lender calculation, and the gap is worth seeing.',
@@ -416,7 +417,7 @@ export const ADDITIONAL_QUESTIONS: Question[] = [
     prompt: 'How much is still outstanding on that borrowing?',
     inputType: 'currency',
     allowUnknown: true,
-    appliesWhen: applies.always,
+    appliesWhen: applies.hasExistingLoan,
     tightens: ['maxAmount', 'emiCeiling'],
     whyWeAsk:
       'The monthly figure alone does not tell us whether it ends next year or in ten. The balance does.',
@@ -428,7 +429,7 @@ export const ADDITIONAL_QUESTIONS: Question[] = [
     prompt: 'What rate are you paying on it?',
     inputType: 'number',
     allowUnknown: true,
-    appliesWhen: applies.always,
+    appliesWhen: applies.hasExistingLoan,
     tightens: ['fairRate'],
     whyWeAsk:
       'Without the rate we cannot tell you whether replacing it would save you money — which is sometimes worth more than the new loan.',
@@ -452,7 +453,7 @@ export const ADDITIONAL_QUESTIONS: Question[] = [
     prompt: 'What do you pay on it each month, as a percentage?',
     inputType: 'number',
     allowUnknown: true,
-    appliesWhen: applies.always,
+    appliesWhen: (a) => (amountOf(a, 'informalDebtOutstanding') ?? 0) > 0,
     tightens: ['emiCeiling', 'maxAmount'],
     whyWeAsk:
       'Rates like this are quoted monthly and compound into something much larger than they sound. We convert it properly.',
@@ -465,6 +466,7 @@ export const ADDITIONAL_QUESTIONS: Question[] = [
     inputType: 'boolean',
     allowUnknown: false,
     appliesWhen: applies.always,
+    gateFor: 'creditCardOutstanding',
     tightens: ['emiCeiling', 'maxAmount'],
     whyWeAsk:
       'A "no" here is genuinely useful — it removes an assumption we would otherwise have to carry.',
@@ -570,7 +572,7 @@ export const ADDITIONAL_QUESTIONS: Question[] = [
     prompt: 'What rate did they quote?',
     inputType: 'number',
     allowUnknown: true,
-    appliesWhen: applies.always,
+    appliesWhen: applies.hasNamedLender,
     tightens: ['fairRate'],
     whyWeAsk: 'So we can tell you whether it is a fair price for someone in your position.',
     hint: '% per year',
@@ -581,7 +583,7 @@ export const ADDITIONAL_QUESTIONS: Question[] = [
     prompt: 'What processing fee did they mention?',
     inputType: 'number',
     allowUnknown: true,
-    appliesWhen: applies.always,
+    appliesWhen: applies.hasNamedLender,
     tightens: ['fairRate'],
     whyWeAsk:
       '"I do not know" is fine and common — we will assume the top of the usual range and say so.',
@@ -593,7 +595,7 @@ export const ADDITIONAL_QUESTIONS: Question[] = [
     prompt: 'How much extra do you expect this to earn you each month?',
     inputType: 'currency',
     allowUnknown: false,
-    appliesWhen: applies.always,
+    appliesWhen: applies.isProductive,
     tightens: ['verdict'],
     whyWeAsk:
       'We will not assume a loan earns anything just because you told us it is for business. If it earns, tell us how much.',
@@ -605,7 +607,7 @@ export const ADDITIONAL_QUESTIONS: Question[] = [
     prompt: 'Is that money already coming in, or is it what you expect?',
     inputType: 'boolean',
     allowUnknown: false,
-    appliesWhen: applies.always,
+    appliesWhen: applies.isProductive,
     tightens: ['verdict'],
     whyWeAsk:
       'Earning you can already see counts for twice as much as earning you are forecasting. Neither counts in the bad case.',
@@ -616,7 +618,7 @@ export const ADDITIONAL_QUESTIONS: Question[] = [
     prompt: 'How have your repayments gone?',
     inputType: 'select',
     allowUnknown: false,
-    appliesWhen: applies.always,
+    appliesWhen: applies.mayHaveRepaymentHistory,
     tightens: ['fairRate', 'verdict'],
     whyWeAsk:
       'Recent conduct is more current than a score, and it is the part you can fix on a known timetable.',
@@ -633,7 +635,7 @@ export const ADDITIONAL_QUESTIONS: Question[] = [
     prompt: 'Any bounced payments in the last year?',
     inputType: 'number',
     allowUnknown: false,
-    appliesWhen: applies.always,
+    appliesWhen: applies.mayHaveRepaymentHistory,
     tightens: ['fairRate'],
     whyWeAsk:
       'It adds to your rate now and comes off after a set number of clean months, so it is worth knowing the date.',
@@ -645,7 +647,7 @@ export const ADDITIONAL_QUESTIONS: Question[] = [
     prompt: 'Do you own property? Roughly what is it worth?',
     inputType: 'currency',
     allowUnknown: true,
-    appliesWhen: applies.always,
+    appliesWhen: applies.mightHaveCollateral,
     tightens: ['maxAmount', 'fairRate'],
     whyWeAsk:
       'Property usually opens a much cheaper and much larger loan than an unsecured one — with a real trade-off we will spell out.',
@@ -657,7 +659,7 @@ export const ADDITIONAL_QUESTIONS: Question[] = [
     prompt: 'Is it where you live, or business premises?',
     inputType: 'select',
     allowUnknown: false,
-    appliesWhen: applies.always,
+    appliesWhen: applies.hasStatedProperty,
     tightens: ['maxAmount'],
     whyWeAsk: 'Lenders advance less against commercial property than against a home.',
     options: [
@@ -671,7 +673,7 @@ export const ADDITIONAL_QUESTIONS: Question[] = [
     prompt: 'Is the title clear, with no existing loan against it?',
     inputType: 'boolean',
     allowUnknown: true,
-    appliesWhen: applies.always,
+    appliesWhen: applies.hasStatedProperty,
     tightens: ['maxAmount', 'fairRate'],
     whyWeAsk:
       'Until this is confirmed we hold the cheaper secured option back, because a lender would.',
@@ -682,7 +684,7 @@ export const ADDITIONAL_QUESTIONS: Question[] = [
     prompt: 'What is the on-road price of the vehicle?',
     inputType: 'currency',
     allowUnknown: false,
-    appliesWhen: applies.always,
+    appliesWhen: applies.isBuyingVehicle,
     tightens: ['maxAmount'],
     whyWeAsk: 'The loan is capped at a share of this, whatever your income says.',
     hint: '₹',
@@ -693,7 +695,7 @@ export const ADDITIONAL_QUESTIONS: Question[] = [
     prompt: 'How much can you put down yourself?',
     inputType: 'currency',
     allowUnknown: false,
-    appliesWhen: applies.always,
+    appliesWhen: applies.isBuyingVehicle,
     tightens: ['maxAmount'],
     whyWeAsk: 'A larger deposit means a smaller loan and usually a better rate.',
     hint: '₹',
