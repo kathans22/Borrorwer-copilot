@@ -57,6 +57,7 @@ working for the lender.
 | INC-09 | Co-applicant recognition rules | Their own proof and employment type run through INC-01/02 | A spouse earning ₹18,000 in cash is recognised the same way the main applicant's cash income is. Counting her in full because she is a co-applicant would be the same mistake in a different place. | My judgement |
 | INC-10 | Co-applicant obligations | Their existing EMIs join the obligation side | Half a household's income is no use if the other half of its debt is invisible. | My judgement |
 | INC-11 | When a co-applicant is counted | Only when the borrower has said there is one | Never inferred from marital status or anything else. | My judgement |
+| INC-12 | Recognised income capped at declared income | Where a return is filed, the lender view never exceeds it | Having told the tax authority one number, a borrower cannot ask a lender to believe a larger one. This is the rule that separates the two views most sharply: a shopkeeper taking ₹55,000 a month with ₹35,000 on the return has a safety income of ₹55,000 and a recognised income of ₹35,000, and every eligibility figure is built on the smaller one. | My judgement |
 
 ## AFF — Affordability
 
@@ -76,6 +77,7 @@ working for the lender.
 | AFF-12 | Buffer rebuilding | Treated as a fixed obligation | If it is optional it will not happen. | My judgement |
 | AFF-13 | Stress inside safe carry | No — stress is a separate pass/fail (STR-05) | Applying the income drop inside safe carry as well as in the stress test would charge the borrower for the same risk twice, and for a thin-margin household it drives every answer to zero. | My judgement |
 | AFF-14 | Independence invariant | Neither affordability rule may read the other's output | Enforced by review, not by the compiler. If safe carry ever becomes "FOIR times something", this file has lost the only idea in it worth having. | Design constraint |
+| AFF-15 | Which number the borrower should use | The lower of the two, with a reason naming the term that bound | The brief asks the tool to say which figure to go by, so it is computed rather than written as interface copy. A borrower cannot spend eligibility they cannot service. The reason must name the rent, the dependants, the obligations or the buffer — "your safe limit is lower" tells them nothing they can act on. | Design decision |
 
 ## PRD — Products
 
@@ -170,6 +172,9 @@ would never happen, because FOIR cannot see the difference.
 | REF-07 | When a switch is worth making | Blended rate falls ≥ 2.00 points **and** break-even ≤ 12 months **and** ≤ 30% of remaining tenure | The rate test stops churn for a saving the next fee eats. The break-even tests stop a switch that only pays back after the loan was going to end anyway. | My judgement |
 | REF-08 | Saving exists but break-even fails | Recommend renegotiating with the existing lender | Not "stay". Taking a competing quote back to the current lender costs nothing and has no break-even. | My judgement |
 | REF-09 | Restructuring as a first-class outcome | When the verdict is `do_not_borrow` and a refinance candidate exists, the refinance result is what the app leads with | Telling a borrower paying 42% a year that they cannot afford a new loan, without mentioning the 42%, is a technically correct answer to the wrong question. | Design decision |
+| REF-10 | Assumed cost of a revolving card balance | 42% p.a. when the borrower has not stated it | Issuers publish monthly rates around 3.5% and the balance revolves, so the compounded annual cost lands in the low forties. Well above REF-01, which is the point: a revolving balance is refinance-first debt. | Market observation — NEEDS VERIFICATION |
+| REF-11 | Informal debt repayment shape | Assumed interest-only unless a schedule is stated | This is how it usually works: the monthly payment services the interest and the principal sits there indefinitely. It changes the honest question from "which monthly payment is smaller" — refinancing often costs *more* per month — to "which one ever ends". ₹80,000 at 3% a month is ₹2,400 a month forever, still owing ₹80,000. | My judgement |
+| REF-12 | How the comparison is scored | Cumulative cost over the new loan's tenure, counting principal still outstanding at the end as a cost of staying; break-even found by walking the two cumulative paths, not by division | REF-06's division breaks down when the monthly saving is negative but the total saving is large, which is exactly the informal-debt case this section exists for. | Arithmetic |
 
 ## VRD — Verdict
 
@@ -189,6 +194,7 @@ never merged into one score.
 | VRD-07 | Evidence required for a productive offset | Stated incremental earning per month · stated earning days per month · stated whether already earning or projected | Unstated means no offset. The engine will not infer earning from the purpose alone. | My judgement |
 | VRD-08 | Coverage required | Incremental earning ≥ 1.25 × EMI | An asset that earns exactly its own instalment leaves the borrower working for the lender and carrying all the risk of a slow month. | My judgement |
 | VRD-09 | `borrow_less` output | Must name the amount that does pass | Not allowed to be a number-free disappointment. | Design decision |
+| VRD-10 | Floor under the stress demotion | Stress may take borrow to borrow_less; it may take borrow_less to do_not_borrow only when safe carry cannot service the minimum ticket | Without this floor VRD-05 contradicts its own justification: it says a loan that breaks under stress is "a smaller loan, not no loan", then demotes to do_not_borrow every borrower whose recommended amount already sits at their safe-carry ceiling — which is precisely no loan. The sizing absorbs the stress, not the verdict. Found by running the personas: two of the three hit it. | Design decision |
 
 ## DEF — Defaults for the unanswered
 

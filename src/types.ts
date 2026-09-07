@@ -63,6 +63,19 @@ export type CreditScore = Brand<number, 'CreditScore'>
  */
 export type Answer<T> = { value: T } | { unknown: true }
 
+/**
+ * A numeric answer, which may also be a range.
+ *
+ * Borrowers state incomes as ranges - "twenty-six to thirty thousand" - and
+ * the two views collapse that range to different points (INC-05): the lender
+ * view averages, the safety view takes the bad month. A single `value` cannot
+ * express the question, so numeric fields carry this instead of `Answer`.
+ */
+export type NumericAnswer<T extends number> =
+  | { value: T }
+  | { range: Band<T> }
+  | { unknown: true }
+
 export type ProductType =
   | 'personal'
   | 'lap'
@@ -101,6 +114,9 @@ export type CityTier = 'metro' | 'tier2' | 'tier3' | 'rural'
 
 export type RepaymentHistory = 'none' | 'clean' | 'settled' | 'current_overdue'
 
+/** A shop is lent against more conservatively than a home (PRD-05). */
+export type PropertyKind = 'residential' | 'commercial'
+
 /**
  * Every answer the borrower can give. All fields optional: a part-finished
  * assessment is the normal state, not an error state.
@@ -109,64 +125,71 @@ export type BorrowerAnswers = {
   /* What they are asking for */
   productType?: Answer<ProductType>
   loanPurpose?: Answer<LoanPurpose>
-  requestedAmount?: Answer<Rupees>
-  requestedTenure?: Answer<Months>
+  requestedAmount?: NumericAnswer<Rupees>
+  requestedTenure?: NumericAnswer<Months>
 
   /* Who they are */
-  age?: Answer<Years>
+  age?: NumericAnswer<Years>
   cityTier?: Answer<CityTier>
-  dependents?: Answer<Count>
+  dependents?: NumericAnswer<Count>
   employmentType?: Answer<EmploymentType>
-  timeInCurrentWork?: Answer<Months>
+  timeInCurrentWork?: NumericAnswer<Months>
 
   /* What they earn - note the differing units */
-  salariedNetIncomeMonthly?: Answer<RupeesPerMonth>
-  cashIncomeMonthly?: Answer<RupeesPerMonth>
-  itrIncomeAnnual?: Answer<RupeesPerYear>
-  bankCreditsMonthly?: Answer<RupeesPerMonth>
+  salariedNetIncomeMonthly?: NumericAnswer<RupeesPerMonth>
+  cashIncomeMonthly?: NumericAnswer<RupeesPerMonth>
+  itrIncomeAnnual?: NumericAnswer<RupeesPerYear>
+  bankCreditsMonthly?: NumericAnswer<RupeesPerMonth>
   incomeProof?: Answer<IncomeProofType>
   incomeStability?: Answer<IncomeStability>
 
   /* Co-applicant */
   hasCoApplicant?: Answer<boolean>
-  coApplicantIncomeMonthly?: Answer<RupeesPerMonth>
+  coApplicantIncomeMonthly?: NumericAnswer<RupeesPerMonth>
   coApplicantIncomeProof?: Answer<IncomeProofType>
+  coApplicantEmploymentType?: Answer<EmploymentType>
 
   /* What they already owe */
-  existingEmiMonthly?: Answer<RupeesPerMonth>
-  creditCardOutstanding?: Answer<Rupees>
-  informalDebtOutstanding?: Answer<Rupees>
-  informalDebtRateMonthly?: Answer<MonthlyRatePct>
-  householdExpensesMonthly?: Answer<RupeesPerMonth>
-  rentMonthly?: Answer<RupeesPerMonth>
-  savingsBuffer?: Answer<Rupees>
+  existingEmiMonthly?: NumericAnswer<RupeesPerMonth>
+  creditCardOutstanding?: NumericAnswer<Rupees>
+  informalDebtOutstanding?: NumericAnswer<Rupees>
+  informalDebtRateMonthly?: NumericAnswer<MonthlyRatePct>
+  householdExpensesMonthly?: NumericAnswer<RupeesPerMonth>
+  rentMonthly?: NumericAnswer<RupeesPerMonth>
+  savingsBuffer?: NumericAnswer<Rupees>
 
   /* Credit standing */
-  creditScore?: Answer<CreditScore>
+  creditScore?: NumericAnswer<CreditScore>
   hasCreditHistory?: Answer<boolean>
   repaymentHistory?: Answer<RepaymentHistory>
-  bouncedEmisLast12m?: Answer<Count>
+  bouncedEmisLast12m?: NumericAnswer<Count>
 
   /* Security offered */
-  propertyValue?: Answer<Rupees>
+  propertyValue?: NumericAnswer<Rupees>
+  propertyKind?: Answer<PropertyKind>
   propertyTitleClear?: Answer<boolean>
-  goldWeight?: Answer<Grams>
-  goldPurity?: Answer<Karat>
-  vehicleOnRoadPrice?: Answer<Rupees>
-  downPaymentAvailable?: Answer<Rupees>
+  goldWeight?: NumericAnswer<Grams>
+  goldPurity?: NumericAnswer<Karat>
+  vehicleOnRoadPrice?: NumericAnswer<Rupees>
+  downPaymentAvailable?: NumericAnswer<Rupees>
+
+  /* What the loan itself would earn, where it earns (PUR-02, VRD-07) */
+  incrementalEarningMonthly?: NumericAnswer<RupeesPerMonth>
+  incrementalEarningDaysPerMonth?: NumericAnswer<Count>
+  incrementalEarningAlreadyHappening?: Answer<boolean>
 
   /* What a lender has already offered them */
   lenderType?: Answer<LenderType>
-  quotedRate?: Answer<AnnualRatePct>
-  quotedProcessingFee?: Answer<Percent>
-  quotedTenure?: Answer<Months>
+  quotedRate?: NumericAnswer<AnnualRatePct>
+  quotedProcessingFee?: NumericAnswer<Percent>
+  quotedTenure?: NumericAnswer<Months>
 
   /* The loan they may be refinancing */
-  existingLoanOutstanding?: Answer<Rupees>
-  existingLoanRate?: Answer<AnnualRatePct>
-  existingLoanEmi?: Answer<RupeesPerMonth>
-  existingLoanRemainingTenure?: Answer<Months>
-  existingLoanForeclosureFee?: Answer<Percent>
+  existingLoanOutstanding?: NumericAnswer<Rupees>
+  existingLoanRate?: NumericAnswer<AnnualRatePct>
+  existingLoanEmi?: NumericAnswer<RupeesPerMonth>
+  existingLoanRemainingTenure?: NumericAnswer<Months>
+  existingLoanForeclosureFee?: NumericAnswer<Percent>
 }
 
 /**

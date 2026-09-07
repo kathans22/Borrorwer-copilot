@@ -169,6 +169,21 @@ export const CO_APPLICANT = {
   countOnlyIfExplicitlyStated: true,
 }
 
+/**
+ * INC-12 - Recognised income is capped at what the borrower has declared.
+ *
+ * Where a self-employed borrower has filed a return, no lender will count
+ * more than the return shows, however much cash actually crosses the counter.
+ * The return is a statement against interest: having told the tax authority
+ * one number, the borrower cannot ask a lender to believe a larger one.
+ *
+ * This is the rule that separates the two views most sharply. A shopkeeper
+ * taking 55,000 a month with 35,000 on the return has a safety income of
+ * 55,000 and a recognised income of 35,000, and every eligibility number in
+ * the app is built on the smaller figure.
+ */
+export const RECOGNISED_INCOME_CAPPED_AT_DECLARED = true
+
 /* =====================================================================
  * AFF - Affordability
  *
@@ -309,6 +324,22 @@ export const SAFE_CARRY = {
  * only idea in it worth having.
  */
 export const AFFORDABILITY_RULES_ARE_INDEPENDENT = true
+
+/**
+ * AFF-15 - Which of the two numbers the borrower should actually use.
+ *
+ * The brief asks the tool to say which figure to go by, so it is computed
+ * here rather than written as copy in the interface. The rule is simply the
+ * lower of the two: a borrower cannot spend eligibility they cannot service,
+ * and the lender ceiling is a statement about the lender's appetite, not
+ * about the household.
+ *
+ * The reason given must name the term that actually bound - the rent, the
+ * dependants, the existing obligations, the buffer - because "your safe
+ * limit is lower" tells the borrower nothing they can act on.
+ */
+export const LEAD_WITH_LOWER_OF_THE_TWO_AMOUNTS = true
+export const USE_WHICH_REASON_MUST_NAME_BINDING_TERM = true
 
 /* =====================================================================
  * PRD - Product catalogue
@@ -924,6 +955,37 @@ export const RENEGOTIATE_WHEN_SAVING_EXISTS_BUT_BREAK_EVEN_FAILS = true
  */
 export const SURFACE_REFINANCE_AS_PRIMARY_WHEN_DO_NOT_BORROW = true
 
+/**
+ * REF-10 - Assumed cost of a revolving credit card balance when the borrower
+ * has not stated the rate. Card issuers publish monthly rates in the region
+ * of 3.5% and the balance revolves, so the annual cost lands in the low
+ * forties once compounded. Well above the REF-01 threshold, which is the
+ * point: a revolving balance is refinance-first debt.
+ */
+export const CREDIT_CARD_ASSUMED_ANNUAL_RATE_PCT: AnnualRatePct = pctPerYear(42)
+
+/**
+ * REF-11 - Informal debt is assumed to be interest-only unless the borrower
+ * states a repayment schedule.
+ *
+ * This is how it usually works: the monthly payment services the interest and
+ * the principal sits there indefinitely. It matters enormously to the
+ * comparison, because it means the honest question is not "which monthly
+ * payment is smaller" - refinancing often costs more per month - but "which
+ * one ever ends". A borrower paying 3% a month on 80,000 pays 2,400 a month
+ * forever and still owes 80,000.
+ */
+export const INFORMAL_DEBT_ASSUMED_INTEREST_ONLY = true
+
+/**
+ * REF-12 - How the comparison is scored when refinancing raises the monthly
+ * outflow but lowers the total cost. Compared over the new loan's tenure,
+ * counting the principal still outstanding at the end of that period as a
+ * cost of staying, and the break-even month found by walking the cumulative
+ * cost of each path rather than by dividing.
+ */
+export const REFINANCE_COMPARISON_METHOD = 'cumulative_cost_including_residual_principal' as const
+
 /* =====================================================================
  * VRD - Verdict
  *
@@ -1015,6 +1077,23 @@ export const PRODUCTIVE_MIN_COVERAGE_RATIO: Ratio = ratio(1.25)
  * disappointment. It must name the amount that does pass.
  */
 export const BORROW_LESS_MUST_STATE_PASSING_AMOUNT = true
+
+/**
+ * VRD-10 - The stress demotion stops at borrow_less while some viable
+ * smaller amount still exists.
+ *
+ * Without this floor VRD-05 contradicts its own justification. It says a loan
+ * that breaks under stress is "a smaller loan, not no loan", and then, for
+ * any borrower whose recommended amount already sits at their safe-carry
+ * ceiling, demotes them to do_not_borrow - which is precisely no loan.
+ *
+ * The sizing is what should absorb the stress, not the verdict. So the
+ * demotion may take borrow to borrow_less, and it may take borrow_less to
+ * do_not_borrow only when safe carry cannot service even the minimum ticket
+ * (which VRD-04 has already caught). Otherwise the answer stays borrow_less
+ * and the stress result is reported against the smaller amount.
+ */
+export const STRESS_DEMOTION_FLOOR_AT_BORROW_LESS = true
 
 /* =====================================================================
  * DEF - Defaults for the unanswered
@@ -1601,6 +1680,7 @@ export const RULES = {
     EXPENSE_RANGE_COLLAPSE,
     ITR_ANNUAL_TO_MONTHLY_DIVISOR,
     CO_APPLICANT,
+    RECOGNISED_INCOME_CAPPED_AT_DECLARED,
   },
   affordability: {
     FOIR_CAP_BY_INCOME_BAND,
@@ -1613,6 +1693,8 @@ export const RULES = {
     BUFFER_ACCRUAL_CAP_RATIO_OF_SURPLUS,
     SAFE_CARRY,
     AFFORDABILITY_RULES_ARE_INDEPENDENT,
+    LEAD_WITH_LOWER_OF_THE_TWO_AMOUNTS,
+    USE_WHICH_REASON_MUST_NAME_BINDING_TERM,
   },
   products: {
     PRODUCTS,
@@ -1649,6 +1731,9 @@ export const RULES = {
     REFINANCE_WORTH_IT,
     RENEGOTIATE_WHEN_SAVING_EXISTS_BUT_BREAK_EVEN_FAILS,
     SURFACE_REFINANCE_AS_PRIMARY_WHEN_DO_NOT_BORROW,
+    CREDIT_CARD_ASSUMED_ANNUAL_RATE_PCT,
+    INFORMAL_DEBT_ASSUMED_INTEREST_ONLY,
+    REFINANCE_COMPARISON_METHOD,
   },
   verdict: {
     VERDICT_CUTOFFS,
@@ -1660,6 +1745,7 @@ export const RULES = {
     PRODUCTIVE_OFFSET_REQUIRED_EVIDENCE,
     PRODUCTIVE_MIN_COVERAGE_RATIO,
     BORROW_LESS_MUST_STATE_PASSING_AMOUNT,
+    STRESS_DEMOTION_FLOOR_AT_BORROW_LESS,
   },
   defaults: {
     HOUSEHOLD_EXPENSE_DEFAULT,
