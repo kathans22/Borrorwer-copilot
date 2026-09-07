@@ -5,21 +5,28 @@
  * page, and adding a dependency to manage that would be more machinery than
  * the problem deserves.
  *
- * Answers live here and move between the screens as plain state.
+ * Answers live here and are written to the phone's own storage on every
+ * change, so a dropped connection or an accidental refresh never costs
+ * somebody a part-finished assessment.
  */
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { BorrowerAnswers } from '../types'
 import { Intro } from './Intro'
 import { Results } from './Results'
 import { Wizard } from './Wizard'
 import type { AnswerValue } from './QuestionInput'
+import { clearAnswers, loadAnswers, saveAnswers } from './session'
 
 type Screen = 'intro' | 'wizard' | 'results'
 
 export function App() {
-  const [answers, setAnswers] = useState<BorrowerAnswers>({})
+  const [answers, setAnswers] = useState<BorrowerAnswers>(() => loadAnswers())
   const [screen, setScreen] = useState<Screen>('intro')
+
+  useEffect(() => {
+    saveAnswers(answers)
+  }, [answers])
 
   const answered = Object.keys(answers).length
 
@@ -28,6 +35,7 @@ export function App() {
   }
 
   function handleClear() {
+    clearAnswers()
     setAnswers({})
     setScreen('intro')
   }

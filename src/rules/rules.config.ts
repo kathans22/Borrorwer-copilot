@@ -2042,6 +2042,49 @@ export const ZERO_COERCION_JUSTIFIED: Partial<Record<AnswerFieldId, string>> = {
 export const ASSERT_EVERY_DEFAULT_HAS_A_REASON = true
 
 /* =====================================================================
+ * PRV - What is kept, and where
+ *
+ * The brief says no personal data is stored. Our reading of that, recorded
+ * here rather than left implicit in a component: it is about a server
+ * holding somebody's finances, not about a browser remembering what they
+ * typed two minutes ago.
+ * ===================================================================== */
+
+/**
+ * PRV-01 - Answers are kept in the browser's own storage on the borrower's
+ * device, and nowhere else.
+ *
+ * Losing a part-finished assessment to an accidental refresh would be its
+ * own small cruelty, and it would fall hardest on somebody filling this in
+ * on a phone between jobs. The data never leaves the device: there is no
+ * account, no server and no analytics in this application, so there is
+ * nowhere for it to go even by mistake.
+ *
+ * This was one of the questions sent to Lokta on day one. If the answer
+ * comes back that even local storage is out of scope, this constant is the
+ * only thing that changes.
+ */
+export const KEEP_ANSWERS_ON_DEVICE = true
+
+/**
+ * PRV-02 - Clearing is one visible control, on every screen, and it removes
+ * everything.
+ *
+ * Not buried in a settings page. Somebody who has just typed their household
+ * income into a borrowed phone should be able to see how to remove it
+ * without hunting.
+ */
+export const CLEAR_CONTROL_ALWAYS_VISIBLE = true
+
+/**
+ * PRV-03 - No network calls at runtime, of any kind.
+ *
+ * Not for rates, not for scores, not for telemetry. Everything the app knows
+ * is in this file and in what the borrower typed.
+ */
+export const NO_RUNTIME_NETWORK_CALLS = true
+
+/* =====================================================================
  * The single exported object
  *
  * Every value above, in one place. Change something here and the app's
@@ -2186,6 +2229,11 @@ export const RULES = {
     ASSERT_NO_UNJUSTIFIED_ZERO_COERCION,
     ZERO_COERCION_JUSTIFIED,
     ASSERT_EVERY_DEFAULT_HAS_A_REASON,
+  },
+  privacy: {
+    KEEP_ANSWERS_ON_DEVICE,
+    CLEAR_CONTROL_ALWAYS_VISIBLE,
+    NO_RUNTIME_NETWORK_CALLS,
   },
   routing: {
     ROUTING_MAY_OVERRIDE_STATED_PRODUCT,

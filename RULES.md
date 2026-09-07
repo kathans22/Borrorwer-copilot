@@ -367,6 +367,20 @@ throw.
 | ASR-02 | Where zero *is* permitted, and why it does not flatter | savings · rent when the borrower owns · bounces when a bureau score exists · informal debt, card balance and other loans (assuming one exists would be inventing it — the uncertainty is carried by WID-01 instead) · incremental earning · co-applicant income · down payment | Each entry has to state the reason it works against the borrower's case or is a fact rather than a guess. | Design constraint |
 | ASR-03 | Every applied default must reach the borrower as a Reason | Throws | Checked against the finished output rather than against intent: if a default fired and no Reason naming it survives into what the interface shows, it was computed with and then dropped. A silent assumption is the kind that only surfaces when somebody asks where a number came from. | Design constraint |
 
+## PRV — What is kept, and where
+
+The brief says no personal data is stored. **Our reading, recorded here rather
+than left implicit in a component:** that is about a server holding somebody's
+finances, not about a browser remembering what they typed two minutes ago.
+This was one of the day-one questions to Lokta; if the answer comes back that
+even local storage is out of scope, PRV-01 is the only thing that changes.
+
+| ID | What | Value | Why | Source |
+|---|---|---|---|---|
+| PRV-01 | Answers are kept in the browser's own storage, on the borrower's device | Yes | Losing a part-finished assessment to an accidental refresh would be its own small cruelty, and it would fall hardest on somebody filling this in on a phone between jobs. The data never leaves the device — there is no account, no server and no analytics, so there is nowhere for it to go even by mistake. | Design decision |
+| PRV-02 | Clearing is one visible control, on every screen | Always visible | Not buried in settings. Somebody who has just typed their household income into a borrowed phone should be able to see how to remove it without hunting. | Design decision |
+| PRV-03 | No network calls at runtime | None, of any kind | Not for rates, not for scores, not for telemetry. Everything the app knows is in the rules file and in what the borrower typed. | Design constraint |
+
 ---
 
 ## Worked example: the two affordability rules disagree
