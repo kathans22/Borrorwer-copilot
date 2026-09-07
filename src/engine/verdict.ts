@@ -89,8 +89,10 @@ export function decideVerdict(input: {
   stress: StressCase | null
   refinance: RefinanceResult | null
   hardFails: ConstraintId[]
+  /** Derived from the bands of the numbers below it (CONF-03). */
+  confidence: Confidence
 }): VerdictAssessment {
-  const { answers, income, affordability: aff, purpose, product } = input
+  const { answers, affordability: aff, purpose, product } = input
   const reasons: Reason[] = []
   const constraints: ConstraintId[] = [...input.hardFails]
   const wouldNarrow: AnswerFieldId[] = []
@@ -105,7 +107,7 @@ export function decideVerdict(input: {
         ['employmentType', 'incomeProof', 'creditScore'],
       ),
     )
-    return hardFail(reasons, constraints, wouldNarrow, input.refinance, 0)
+    return hardFail(reasons, constraints, wouldNarrow, input.refinance, 0, input.confidence)
   }
 
   if (readChoice(answers, 'repaymentHistory') === 'current_overdue') {
@@ -116,7 +118,7 @@ export function decideVerdict(input: {
         ['repaymentHistory'],
       ),
     )
-    return hardFail(reasons, constraints, wouldNarrow, input.refinance, 0)
+    return hardFail(reasons, constraints, wouldNarrow, input.refinance, 0, input.confidence)
   }
 
   const minViableEmi = minViableEmiFor(product, input.midRatePct, input.tenureMonths)
@@ -129,7 +131,7 @@ export function decideVerdict(input: {
         ['householdExpensesMonthly', 'rentMonthly', 'existingEmiMonthly', 'dependents'],
       ),
     )
-    return hardFail(reasons, constraints, wouldNarrow, input.refinance, minViableEmi)
+    return hardFail(reasons, constraints, wouldNarrow, input.refinance, minViableEmi, input.confidence)
   }
 
   // ------------------------------------------------------------------
@@ -292,13 +294,10 @@ export function decideVerdict(input: {
     reasons.push(refinanceLead(input.refinance))
   }
 
-  const confidence: Confidence =
-    income.recognitionRatio === 0 ? 'low' : aff.household.reasons.length > 2 ? 'medium' : 'high'
-
   return {
     output: {
       value: verdict,
-      confidence,
+      confidence: input.confidence,
       reasons,
       wouldNarrow: [...new Set(wouldNarrow)],
     },
@@ -324,6 +323,7 @@ function hardFail(
   wouldNarrow: AnswerFieldId[],
   refi: RefinanceResult | null,
   minViableEmi: number,
+  confidence: Confidence,
 ): VerdictAssessment {
   if (refi && SURFACE_REFINANCE_AS_PRIMARY_WHEN_DO_NOT_BORROW) {
     reasons.push(refinanceLead(refi))
@@ -331,7 +331,7 @@ function hardFail(
   return {
     output: {
       value: 'do_not_borrow',
-      confidence: 'high',
+      confidence,
       reasons,
       wouldNarrow: [...new Set(wouldNarrow)],
     },

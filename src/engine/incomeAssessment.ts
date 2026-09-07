@@ -18,6 +18,8 @@ import {
   CO_APPLICANT,
   EMPLOYMENT_RECOGNITION_CAP_RATIO,
   INCOME_PROOF_RECOGNITION_RATIO,
+  PROOF_FALLBACK_WITHOUT_FIGURE,
+  PROOF_REQUIRES_ITS_FIGURE,
   SAFETY_VIEW_RECOGNITION_RATIO,
   type ConstraintId,
 } from '../rules/rules.config'
@@ -70,13 +72,30 @@ export function assessIncome(answers: BorrowerAnswers): IncomeAssessment {
   const constraints: ConstraintId[] = []
 
   const employmentType = readChoice<EmploymentType>(answers, 'employmentType')
-  const incomeProof = readChoice<IncomeProofType>(answers, 'incomeProof') ?? 'none'
+  const claimedProof = readChoice<IncomeProofType>(answers, 'incomeProof') ?? 'none'
   const selfEmployed = isSelfEmployed(employmentType)
 
   const salaried = readNumeric(answers, 'salariedNetIncomeMonthly', 'income')
   const cash = readNumeric(answers, 'cashIncomeMonthly', 'income')
   const itr = readNumeric(answers, 'itrIncomeAnnual', 'income')
   const credits = readNumeric(answers, 'bankCreditsMonthly', 'income')
+
+  // INC-13 - a claimed return with no figure behind it is a claim, not a
+  // document, and must not out-earn the same borrower once they hand the
+  // number over.
+  const proofLacksItsFigure = PROOF_REQUIRES_ITS_FIGURE && claimedProof === 'itr' && !itr?.stated
+  const incomeProof: IncomeProofType = proofLacksItsFigure
+    ? PROOF_FALLBACK_WITHOUT_FIGURE
+    : claimedProof
+  if (proofLacksItsFigure) {
+    reasons.push(
+      reason(
+        'You have told us you file a return but not what it shows, so for now we are counting your income the way a lender counts bank statements. Give us the figure and this moves.',
+        ['itrIncomeAnnual', 'incomeProof'],
+      ),
+    )
+    wouldNarrow.push('itrIncomeAnnual')
+  }
 
   const itrMonthlyUnderwriting = itr?.stated ? annualToMonthly(itr.underwriting) : null
   const itrMonthlySafety = itr?.stated ? annualToMonthly(itr.safety) : null

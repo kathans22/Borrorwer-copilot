@@ -10,6 +10,7 @@
 
 import {
   BUFFER_ACCRUAL_CAP_RATIO_OF_SURPLUS,
+  MIN_WIDENING_SCALE_RATIO_OF_INCOME,
   BUFFER_REBUILD_HORIZON_MONTHS,
   EMERGENCY_BUFFER_TARGET_MONTHS,
   FOIR_ADJUSTMENT_RATIO_POINTS_BY_EMPLOYMENT,
@@ -24,7 +25,6 @@ import type {
   AnswerFieldId,
   Band,
   BorrowerAnswers,
-  Confidence,
   LoanPurpose,
   NumericOutput,
   Reason,
@@ -34,6 +34,8 @@ import { percent, ratioAsPercent, reason, rupees } from './format'
 import { monthlyRateToAnnualPct, principalFor } from './money'
 import { readNumeric, resolveExistingObligations, resolveHousehold, type Household } from './resolve'
 import type { IncomeAssessment } from './incomeAssessment'
+import type { Ledger } from './assumptions'
+import { resolveUncertainty } from './uncertainty'
 
 export type Affordability = {
   /** AFF-04. What a lender will allow as a monthly instalment. */
@@ -97,19 +99,20 @@ export function assessAffordability(
   answers: BorrowerAnswers,
   income: IncomeAssessment,
   purpose: LoanPurpose,
+  ledger: Ledger,
 ): Affordability {
   const reasons: Reason[] = []
   const wouldNarrow: AnswerFieldId[] = []
   const constraints: ConstraintId[] = []
 
-  const household = resolveHousehold(answers)
+  const household = resolveHousehold(answers, ledger)
   reasons.push(...household.reasons)
   wouldNarrow.push(...household.wouldNarrow)
   if (household.wouldNarrow.includes('householdExpensesMonthly')) {
     constraints.push('expenses_unstated')
   }
 
-  const obligations = resolveExistingObligations(answers, income.reliableSafetyIncomeMonthly)
+  const obligations = resolveExistingObligations(answers, income.reliableSafetyIncomeMonthly, ledger)
   if (obligations.reason) {
     reasons.push(obligations.reason)
     wouldNarrow.push('existingEmiMonthly')
@@ -272,16 +275,16 @@ function amountBand(emi: number, rateBand: Band<number>, tenureMonths: number): 
  * what bind" tells them where to look.
  */
 export function buildMaxAmount(input: {
+  answers: BorrowerAnswers
   affordability: Affordability
   rateBand: Band<number>
   tenureMonths: number
-  confidence: Confidence
-  lenderWouldNarrow: AnswerFieldId[]
-  safeWouldNarrow: AnswerFieldId[]
   /** What the routed product can actually deliver, whatever the income says. */
   productCeiling: number
+  /** WID-05 - monthly income, from which the amount-scale floor is derived. */
+  safetyIncomeMonthly: number
 }): MaxAmount {
-  const { affordability: aff, rateBand, tenureMonths, productCeiling } = input
+  const { answers, affordability: aff, rateBand, tenureMonths, productCeiling } = input
 
   // Neither figure may exceed what the product itself will advance - an LTV
   // cap or a ticket ceiling binds regardless of what the household can carry.
@@ -292,32 +295,48 @@ export function buildMaxAmount(input: {
   const lenderBand = cap(amountBand(aff.lenderEmiCeiling, rateBand, tenureMonths))
   const safeBand = cap(amountBand(aff.safeCarryEmi, rateBand, tenureMonths))
 
+  // Both figures are widened by the same unanswered questions and read their
+  // confidence off the result, so neither can be labelled more certain than
+  // its own width (CONF-02).
+  // WID-05 - the amount that a sixth of a month's income would service over
+  // this term, used as the floor on the widening scale so that an amount
+  // which has collapsed to nothing is not reported as a certainty.
+  const amountScale = principalFor(
+    input.safetyIncomeMonthly * (MIN_WIDENING_SCALE_RATIO_OF_INCOME as number),
+    (rateBand.low + rateBand.high) / 2,
+    tenureMonths,
+  )
+  const lenderUncertainty = resolveUncertainty(answers, 'maxAmount', lenderBand, amountScale)
+  const safeUncertainty = resolveUncertainty(answers, 'maxAmount', safeBand, amountScale)
+
   const lenderLikely: NumericOutput<Rupees> = {
-    band: lenderBand,
-    confidence: input.confidence,
+    band: lenderUncertainty.band,
+    confidence: lenderUncertainty.confidence,
     reasons: [
       reason(
-        `${rupees(lenderBand.low)} to ${rupees(lenderBand.high)} is what a ${rupees(aff.lenderEmiCeiling)} monthly instalment buys over ${Math.round(tenureMonths)} months at ${percent(rateBand.low)} to ${percent(rateBand.high)}.`,
+        `${rupees(lenderUncertainty.band.low)} to ${rupees(lenderUncertainty.band.high)} is what a ${rupees(aff.lenderEmiCeiling)} monthly instalment buys over ${Math.round(tenureMonths)} months at ${percent(rateBand.low)} to ${percent(rateBand.high)}.`,
         ['employmentType', 'incomeProof', 'creditScore'],
       ),
     ],
-    wouldNarrow: input.lenderWouldNarrow,
+    wouldNarrow: lenderUncertainty.wouldNarrow,
   }
 
   const borrowerSafe: NumericOutput<Rupees> = {
-    band: safeBand,
-    confidence: input.confidence,
+    band: safeUncertainty.band,
+    confidence: safeUncertainty.confidence,
     reasons: [
       reason(
-        `${rupees(safeBand.low)} to ${rupees(safeBand.high)} is what your household can carry at ${rupees(aff.safeCarryEmi)} a month over the same term.`,
+        `${rupees(safeUncertainty.band.low)} to ${rupees(safeUncertainty.band.high)} is what your household can carry at ${rupees(aff.safeCarryEmi)} a month over the same term.`,
         ['householdExpensesMonthly', 'rentMonthly', 'dependents', 'savingsBuffer'],
       ),
     ],
-    wouldNarrow: input.safeWouldNarrow,
+    wouldNarrow: safeUncertainty.wouldNarrow,
   }
 
   const useWhich: MaxAmount['useWhich'] =
-    safeBand.high <= lenderBand.high ? 'borrowerSafe' : 'lenderLikely'
+    (safeUncertainty.band.high as number) <= (lenderUncertainty.band.high as number)
+      ? 'borrowerSafe'
+      : 'lenderLikely'
 
   return {
     lenderLikely,
@@ -325,9 +344,9 @@ export function buildMaxAmount(input: {
     useWhich,
     useWhichReason:
       useWhich === 'borrowerSafe'
-        ? reason(bindingPressure(aff, lenderBand, safeBand), bindingFields(aff))
+        ? reason(bindingPressure(aff, lenderUncertainty.band, safeUncertainty.band), bindingFields(aff))
         : reason(
-            `Go by ${rupees(lenderBand.high)}. Your household could carry more than a lender will advance here, so what you will be offered is the binding constraint rather than what you can afford.`,
+            `Go by ${rupees(lenderUncertainty.band.high)}. Your household could carry more than a lender will advance here, so what you will be offered is the binding constraint rather than what you can afford.`,
             ['employmentType', 'incomeProof'],
           ),
   }

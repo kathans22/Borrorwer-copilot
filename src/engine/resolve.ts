@@ -21,6 +21,7 @@ import {
   RENT_DEFAULT_INR_PER_MONTH,
 } from '../rules/rules.config'
 import type { AnswerFieldId, BorrowerAnswers, CityTier, Reason } from '../types'
+import type { Ledger } from './assumptions'
 import { reason, rupees } from './format'
 
 /**
@@ -126,7 +127,7 @@ export type Household = {
   wouldNarrow: AnswerFieldId[]
 }
 
-export function resolveHousehold(answers: BorrowerAnswers): Household {
+export function resolveHousehold(answers: BorrowerAnswers, ledger: Ledger): Household {
   const reasons: Reason[] = []
   const wouldNarrow: AnswerFieldId[] = []
 
@@ -134,7 +135,9 @@ export function resolveHousehold(answers: BorrowerAnswers): Household {
   let cityTier = readChoice<CityTier>(answers, 'cityTier')
   if (cityTier === null) {
     cityTier = FIELD_DEFAULTS.cityTier.value as CityTier
-    reasons.push(defaultReason('cityTier', cityTier))
+    const r = defaultReason('cityTier', cityTier)
+    reasons.push(r)
+    ledger.record('cityTier', cityTier, r)
     wouldNarrow.push('cityTier')
   }
 
@@ -145,7 +148,9 @@ export function resolveHousehold(answers: BorrowerAnswers): Household {
     dependents = dep.underwriting
   } else {
     dependents = FIELD_DEFAULTS.dependents.value as number
-    reasons.push(defaultReason('dependents', String(dependents)))
+    const r = defaultReason('dependents', String(dependents))
+    reasons.push(r)
+    ledger.record('dependents', dependents, r)
     wouldNarrow.push('dependents')
   }
 
@@ -163,7 +168,9 @@ export function resolveHousehold(answers: BorrowerAnswers): Household {
     const table = HOUSEHOLD_EXPENSE_DEFAULT[cityTier]
     expensesMonthly =
       (table.baseInrPerMonth as number) + (table.perDependentInrPerMonth as number) * dependents
-    reasons.push(defaultReason('householdExpensesMonthly', rupees(expensesMonthly)))
+    const r = defaultReason('householdExpensesMonthly', rupees(expensesMonthly))
+    reasons.push(r)
+    ledger.record('householdExpensesMonthly', expensesMonthly, r)
     wouldNarrow.push('householdExpensesMonthly')
   }
 
@@ -173,10 +180,21 @@ export function resolveHousehold(answers: BorrowerAnswers): Household {
   if (statedRent?.stated) {
     rentMonthly = statedRent.underwriting
   } else if (ownsProperty) {
+    // DEF-02. Zero here is a fact rather than a flattering guess, but it is
+    // still an assumption and the borrower is told about it - somebody who
+    // owns a shop and rents a home would otherwise never see it.
     rentMonthly = 0
+    const r = reason(
+      'We assumed you pay no rent, because you told us you own property. If that property is business premises and you rent your home, tell us and your safe limit falls.',
+      ['rentMonthly', 'propertyValue'],
+    )
+    reasons.push(r)
+    ledger.record('rentMonthly', rentMonthly, r)
   } else {
     rentMonthly = RENT_DEFAULT_INR_PER_MONTH[cityTier] as number
-    reasons.push(defaultReason('rentMonthly', rupees(rentMonthly)))
+    const r = defaultReason('rentMonthly', rupees(rentMonthly))
+    reasons.push(r)
+    ledger.record('rentMonthly', rentMonthly, r)
     wouldNarrow.push('rentMonthly')
   }
 
@@ -188,7 +206,9 @@ export function resolveHousehold(answers: BorrowerAnswers): Household {
     savings = statedSavings.safety
   } else {
     savings = FIELD_DEFAULTS.savingsBuffer.value as number
-    reasons.push(defaultReason('savingsBuffer', rupees(savings)))
+    const r = defaultReason('savingsBuffer', rupees(savings))
+    reasons.push(r)
+    ledger.record('savingsBuffer', savings, r)
     wouldNarrow.push('savingsBuffer')
   }
 
@@ -213,15 +233,47 @@ export function resolveHousehold(answers: BorrowerAnswers): Household {
 export function resolveExistingObligations(
   answers: BorrowerAnswers,
   safetyIncomeMonthly: number,
+  ledger: Ledger,
 ): Resolved {
   const stated = readNumeric(answers, 'existingEmiMonthly', 'cost')
   if (stated?.stated) {
     return { value: stated.underwriting, stated: true, reason: null }
   }
   const value = safetyIncomeMonthly * (EXISTING_OBLIGATION_DEFAULT_RATIO_OF_INCOME as number)
-  return {
-    value,
-    stated: false,
-    reason: defaultReason('existingEmiMonthly', rupees(value)),
-  }
+  const r = defaultReason('existingEmiMonthly', rupees(value))
+  ledger.record('existingEmiMonthly', value, r)
+  return { value, stated: false, reason: r }
+}
+
+/**
+ * Borrowing the borrower has not mentioned.
+ *
+ * The engine has to compute with nothing for these, which is a coercion to
+ * zero and therefore something ASR-01 polices. Zero is the right assumption
+ * - inventing a debt nobody mentioned would be worse than missing one - but
+ * it is still an assumption, so it is recorded, explained once, and the
+ * uncertainty is carried by the widening in WID-01 rather than pretended
+ * away.
+ */
+export function recordUndisclosedDebts(
+  answers: BorrowerAnswers,
+  ledger: Ledger,
+): Reason | null {
+  const fields: AnswerFieldId[] = [
+    'informalDebtOutstanding',
+    'creditCardOutstanding',
+    'existingLoanOutstanding',
+  ]
+  const missing = fields.filter((f) => {
+    const reading = readNumeric(answers, f, 'cost')
+    return !reading?.stated
+  })
+  if (missing.length === 0) return null
+
+  const r = reason(
+    'We have assumed you have no borrowing beyond what you have told us about - nothing on a card, nothing with a local lender, no other loan running. If any of that exists, telling us usually changes the whole answer.',
+    missing,
+  )
+  for (const field of missing) ledger.record(field, 0, r)
+  return r
 }

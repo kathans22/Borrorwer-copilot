@@ -25,7 +25,6 @@ import type {
   AnswerFieldId,
   Band,
   BorrowerAnswers,
-  Confidence,
   LenderType,
   Reason,
   RepaymentHistory,
@@ -60,7 +59,6 @@ export type Pricing = {
   otherCharges: number
   netDisbursal: number
   unsecuredAvailable: boolean
-  confidence: Confidence
   reasons: Reason[]
   wouldNarrow: AnswerFieldId[]
   constraints: ConstraintId[]
@@ -209,8 +207,6 @@ export function priceProduct(
     ),
   )
 
-  const confidence: Confidence = tier.isDistribution ? 'low' : lenderType ? 'high' : 'medium'
-
   return {
     product,
     creditTier: tierId,
@@ -223,7 +219,6 @@ export function priceProduct(
     otherCharges,
     netDisbursal,
     unsecuredAvailable: tier.unsecuredAvailable && (event ? event.unsecuredAvailable : true),
-    confidence,
     reasons,
     wouldNarrow,
     constraints: [...new Set(constraints)],

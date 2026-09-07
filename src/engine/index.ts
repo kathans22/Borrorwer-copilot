@@ -12,6 +12,7 @@
 import {
   FIELD_DEFAULTS,
   LAP_LTV_BY_PROPERTY_KIND,
+  MIN_WIDENING_SCALE_RATIO_OF_INCOME,
   PRODUCTS,
   type ConstraintId,
   type SupportedProduct,
@@ -28,6 +29,7 @@ import type {
   RupeesPerMonth,
 } from '../types'
 import { assessAffordability, buildMaxAmount, type Affordability } from './affordability'
+import { assertLedgerIsHonest, createLedger, type Ledger } from './assumptions'
 import { buildActionPlan, type ActionContext } from './actionPlan'
 import { assessTenure, stressTest, tenureTradeOff, type StressCase, type TenureOption } from './emi'
 import { percent, rateBand as rateBandText, reason, rupees } from './format'
@@ -36,8 +38,14 @@ import { emiFor, principalFor } from './money'
 import { priceProduct, type Pricing } from './pricing'
 import { rankProducts, type ProductOffer, type ProductRanking } from './productRouting'
 import { assessRefinance, type RefinanceAssessment, type RefinanceTarget } from './refinance'
-import { readChoice, readNumeric } from './resolve'
+import { readChoice, readNumeric, recordUndisclosedDebts } from './resolve'
 import { decideVerdict, type VerdictAssessment } from './verdict'
+import {
+  confidenceFromBand,
+  resolveUncertainty,
+  verdictConfidence,
+  wideningRatio,
+} from './uncertainty'
 
 const ALL_PRODUCTS: SupportedProduct[] = ['personal', 'lap', 'business_unsecured', 'two_wheeler_ev']
 
@@ -55,6 +63,9 @@ export type EngineTrace = {
   verdict: VerdictAssessment
   purpose: LoanPurpose
   reasons: Reason[]
+  /** How much each output was widened for what the borrower has not said. */
+  widening: { maxAmount: number; fairRate: number; emiCeiling: number }
+  ledger: Ledger
 }
 
 export type ComputeOutput = { result: CopilotResult; trace: EngineTrace }
@@ -147,8 +158,10 @@ export function computeWithTrace(answers: BorrowerAnswers): ComputeOutput {
     readChoice<LoanPurpose>(answers, 'loanPurpose') ??
     (FIELD_DEFAULTS.loanPurpose.value as LoanPurpose)
 
+  const ledger = createLedger()
   const income = assessIncome(answers)
-  const affordability = assessAffordability(answers, income, purpose)
+  const affordability = assessAffordability(answers, income, purpose, ledger)
+  const undisclosedDebtReason = recordUndisclosedDebts(answers, ledger)
 
   const requested = readNumeric(answers, 'requestedAmount', 'income')
   const requestedAmountInr = requested?.stated ? requested.underwriting : null
@@ -205,7 +218,59 @@ export function computeWithTrace(answers: BorrowerAnswers): ComputeOutput {
         })
       : null
 
-  // --- verdict, last ---------------------------------------------------
+  // --- O2 --------------------------------------------------------------
+  const maxAmount = buildMaxAmount({
+    answers,
+    affordability,
+    rateBand: top ? top.offer.rateBand : { low: 0, high: 0 },
+    tenureMonths: Math.max(tenureMonths, 1),
+    productCeiling: top ? top.offer.maxAmountInr : 0,
+    safetyIncomeMonthly: income.reliableSafetyIncomeMonthly,
+  })
+
+  // --- O3 --------------------------------------------------------------
+  const rateUncertainty = resolveUncertainty<AnnualRatePct>(answers, 'fairRate', {
+    low: (top ? top.offer.aprBand.low : 0) as AnnualRatePct,
+    high: (top ? top.offer.aprBand.high : 0) as AnnualRatePct,
+  })
+  const fairRate: NumericOutput<AnnualRatePct> = {
+    band: rateUncertainty.band,
+    confidence: rateUncertainty.confidence,
+    reasons: top
+      ? top.pricing.reasons
+      : [reason('No product is open to you, so there is no rate to quote.', ['incomeProof'])],
+    wouldNarrow: rateUncertainty.wouldNarrow,
+  }
+
+  // --- O4 --------------------------------------------------------------
+  // The band here is the uncertainty around the instalment the borrower
+  // should actually plan on - the binding one of the two ceilings - not the
+  // gap between two different quantities. The two ceilings are separate
+  // figures and are reported as such in O2 and in the reasons below; a band
+  // spanning them would mean something different from every other band in
+  // the system.
+  const emiUncertainty = resolveUncertainty<RupeesPerMonth>(
+    answers,
+    'emiCeiling',
+    { low: bindingCeiling as RupeesPerMonth, high: bindingCeiling as RupeesPerMonth },
+    income.reliableSafetyIncomeMonthly * (MIN_WIDENING_SCALE_RATIO_OF_INCOME as number),
+  )
+  const emiCeiling: NumericOutput<RupeesPerMonth> = {
+    band: emiUncertainty.band,
+    confidence: emiUncertainty.confidence,
+    reasons: [
+      ...affordability.reasons,
+      ...(top ? top.tenureReasons : []),
+      ...(stress ? stress.reasons : []),
+      ...(undisclosedDebtReason ? [undisclosedDebtReason] : []),
+    ],
+    wouldNarrow: emiUncertainty.wouldNarrow,
+  }
+
+
+  // --- verdict, genuinely last -----------------------------------------
+  // It consumes the three numeric outputs above, including their derived
+  // confidence, so it cannot be computed before them.
   const verdict = decideVerdict({
     answers,
     income,
@@ -218,47 +283,15 @@ export function computeWithTrace(answers: BorrowerAnswers): ComputeOutput {
     stress,
     refinance: refinance.result,
     hardFails: [],
+    // CONF-03 - no more certain than the arithmetic underneath it.
+    confidence: verdictConfidence({
+      maxAmount: confidenceFromBand({
+        low: maxAmount.borrowerSafe.band.low as number,
+        high: maxAmount.borrowerSafe.band.high as number,
+      }),
+      emiCeiling: emiCeiling.confidence,
+    }),
   })
-
-  // --- O2 --------------------------------------------------------------
-  const maxAmount = buildMaxAmount({
-    affordability,
-    rateBand: top ? top.offer.rateBand : { low: 0, high: 0 },
-    tenureMonths: Math.max(tenureMonths, 1),
-    confidence: top ? top.pricing.confidence : 'low',
-    lenderWouldNarrow: [...income.wouldNarrow, ...(top ? top.pricing.wouldNarrow : [])],
-    safeWouldNarrow: affordability.wouldNarrow,
-    productCeiling: top ? top.offer.maxAmountInr : 0,
-  })
-
-  // --- O3 --------------------------------------------------------------
-  const fairRate: NumericOutput<AnnualRatePct> = {
-    band: {
-      low: (top ? top.offer.aprBand.low : 0) as AnnualRatePct,
-      high: (top ? top.offer.aprBand.high : 0) as AnnualRatePct,
-    },
-    confidence: top ? top.pricing.confidence : 'low',
-    reasons: top ? top.pricing.reasons : [reason('No product is open to you, so there is no rate to quote.', ['incomeProof'])],
-    wouldNarrow: top ? top.pricing.wouldNarrow : ['creditScore'],
-  }
-
-  // --- O4 --------------------------------------------------------------
-  const emiCeiling: NumericOutput<RupeesPerMonth> = {
-    // Ordered, because for a borrower whose income is barely recognised the
-    // household can carry more than the lender will allow, and a band whose
-    // low exceeds its high is not a band.
-    band: {
-      low: Math.min(affordability.safeCarryEmi, affordability.lenderEmiCeiling) as RupeesPerMonth,
-      high: Math.max(affordability.safeCarryEmi, affordability.lenderEmiCeiling) as RupeesPerMonth,
-    },
-    confidence: top ? top.pricing.confidence : 'low',
-    reasons: [
-      ...affordability.reasons,
-      ...(top ? top.tenureReasons : []),
-      ...(stress ? stress.reasons : []),
-    ],
-    wouldNarrow: affordability.wouldNarrow,
-  }
 
   // --- actions ---------------------------------------------------------
   const constraints: ConstraintId[] = [
@@ -302,6 +335,12 @@ export function computeWithTrace(answers: BorrowerAnswers): ComputeOutput {
       ? tenureTradeOff(workingAmount, midRate, top.offer.product, tenureMonths)
       : []
 
+  const widening = {
+    maxAmount: wideningRatio(answers, 'maxAmount'),
+    fairRate: wideningRatio(answers, 'fairRate'),
+    emiCeiling: wideningRatio(answers, 'emiCeiling'),
+  }
+
   const allReasons: Reason[] = [
     ...income.reasons,
     ...affordability.reasons,
@@ -309,6 +348,18 @@ export function computeWithTrace(answers: BorrowerAnswers): ComputeOutput {
     ...(top ? top.tenureReasons : []),
     ...refinance.reasons,
   ]
+
+  // ASR-01 and ASR-03, checked against what the borrower actually sees
+  // rather than against what the engine intended. Everything the interface
+  // renders is in one of these four outputs.
+  assertLedgerIsHonest(ledger, [
+    ...verdict.output.reasons,
+    ...maxAmount.lenderLikely.reasons,
+    ...maxAmount.borrowerSafe.reasons,
+    maxAmount.useWhichReason,
+    ...fairRate.reasons,
+    ...emiCeiling.reasons,
+  ])
 
   return {
     result: {
@@ -332,6 +383,8 @@ export function computeWithTrace(answers: BorrowerAnswers): ComputeOutput {
       verdict,
       purpose,
       reasons: allReasons,
+      widening,
+      ledger,
     },
   }
 }
