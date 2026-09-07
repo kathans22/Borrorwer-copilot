@@ -11,6 +11,8 @@
 import {
   BUFFER_ACCRUAL_CAP_RATIO_OF_SURPLUS,
   MIN_WIDENING_SCALE_RATIO_OF_INCOME,
+  UPCOMING_EXPENSES_AFFECT_SAFETY_VIEW_ONLY,
+  UPCOMING_EXPENSE_HORIZON_MONTHS,
   BUFFER_REBUILD_HORIZON_MONTHS,
   EMERGENCY_BUFFER_TARGET_MONTHS,
   FOIR_ADJUSTMENT_RATIO_POINTS_BY_EMPLOYMENT,
@@ -122,6 +124,15 @@ export function assessAffordability(
     ? informalDebtServiceMonthly(answers)
     : 0
 
+  // AFF-16 - a known lump in the next year, spread across it. Never touches
+  // the lender view: no underwriter asks, so pretending they do would
+  // misrepresent what the borrower will actually be offered.
+  const upcoming = readNumeric(answers, 'upcomingExpenses12m', 'cost')
+  const upcomingMonthly =
+    UPCOMING_EXPENSES_AFFECT_SAFETY_VIEW_ONLY && upcoming?.stated
+      ? upcoming.underwriting / (UPCOMING_EXPENSE_HORIZON_MONTHS as number)
+      : 0
+
   // ------------------------------------------------------------------
   // Lender view - FOIR (AFF-01 to AFF-04)
   // ------------------------------------------------------------------
@@ -165,7 +176,11 @@ export function assessAffordability(
         : (EMERGENCY_BUFFER_TARGET_MONTHS.volatileIncome as number)
 
   const monthlyOutflow =
-    household.expensesMonthly + household.rentMonthly + existingObligations + informalDebtService
+    household.expensesMonthly +
+    household.rentMonthly +
+    existingObligations +
+    informalDebtService +
+    upcomingMonthly
   const bufferTarget = bufferMonths * monthlyOutflow
   const bufferShortfall = Math.max(bufferTarget - household.savings, 0)
 
@@ -189,7 +204,7 @@ export function assessAffordability(
     expenses: household.expensesMonthly,
     rent: household.rentMonthly,
     obligations: existingObligations,
-    informalDebtService,
+    informalDebtService: informalDebtService + upcomingMonthly,
     bufferAccrual,
     residualFloor,
   })
@@ -208,6 +223,15 @@ export function assessAffordability(
       reason(
         `Your household can carry ${rupees(safeCarryEmi)} a month. After ${rupees(household.rentMonthly)} rent and ${rupees(existingObligations)} of existing payments, ${rupees(residualFloor)} has to be left for a household of ${household.dependents + 1} in a ${household.cityTier === 'metro' ? 'metro' : household.cityTier} area to live on, and that floor is what binds.`,
         ['rentMonthly', 'dependents', 'cityTier', 'existingEmiMonthly'],
+      ),
+    )
+  }
+
+  if (upcomingMonthly > 0) {
+    reasons.push(
+      reason(
+        `You have told us about ${rupees(upcoming!.underwriting)} of spending coming in the next year, so ${rupees(upcomingMonthly)} a month of your income is already spoken for before any instalment.`,
+        ['upcomingExpenses12m'],
       ),
     )
   }

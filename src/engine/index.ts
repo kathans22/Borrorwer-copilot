@@ -10,6 +10,7 @@
  */
 
 import {
+  CONSOLIDATION_CAPABLE_PRODUCTS,
   FIELD_DEFAULTS,
   LAP_LTV_BY_PROPERTY_KIND,
   MIN_WIDENING_SCALE_RATIO_OF_INCOME,
@@ -38,7 +39,7 @@ import { emiFor, principalFor } from './money'
 import { priceProduct, type Pricing } from './pricing'
 import { rankProducts, type ProductOffer, type ProductRanking } from './productRouting'
 import { assessRefinance, type RefinanceAssessment, type RefinanceTarget } from './refinance'
-import { readChoice, readNumeric, recordUndisclosedDebts } from './resolve'
+import { normaliseAnswers, readChoice, readNumeric, recordUndisclosedDebts } from './resolve'
 import { decideVerdict, type VerdictAssessment } from './verdict'
 import {
   confidenceFromBand,
@@ -86,7 +87,13 @@ function collateralCap(answers: BorrowerAnswers, product: SupportedProduct): num
     const price = readNumeric(answers, 'vehicleOnRoadPrice', 'income')
     if (!price?.stated) return null
     const ltv = PRODUCTS.two_wheeler_ev.ltvRatio
-    return price.underwriting * (ltv ? (ltv.high as number) : 1)
+    const byLtv = price.underwriting * (ltv ? (ltv.high as number) : 1)
+    // PRD-04's precondition, applied rather than merely stated: a borrower
+    // putting money down needs to borrow only the balance, and a lender will
+    // not advance more than the vehicle costs.
+    const deposit = readNumeric(answers, 'downPaymentAvailable', 'income')
+    const byDeposit = deposit?.stated ? price.underwriting - deposit.underwriting : byLtv
+    return Math.max(Math.min(byLtv, byDeposit), 0)
   }
   return null
 }
@@ -153,7 +160,10 @@ export function computeResult(answers: BorrowerAnswers): CopilotResult {
   return computeWithTrace(answers).result
 }
 
-export function computeWithTrace(answers: BorrowerAnswers): ComputeOutput {
+export function computeWithTrace(raw: BorrowerAnswers): ComputeOutput {
+  // DEF-23 - a stated "no" is carried to the question behind it before
+  // anything else reads the answers.
+  const answers = normaliseAnswers(raw)
   const purpose =
     readChoice<LoanPurpose>(answers, 'loanPurpose') ??
     (FIELD_DEFAULTS.loanPurpose.value as LoanPurpose)
@@ -181,8 +191,11 @@ export function computeWithTrace(answers: BorrowerAnswers): ComputeOutput {
   // --- refinance -------------------------------------------------------
   // Routed to whichever eligible product is cheapest for consolidating, which
   // in practice is a personal loan where the borrower qualifies for one.
+  // REF-13 - a vehicle loan cannot pay off a moneylender; the money can only
+  // buy the vehicle. Quoting a saving the borrower could never realise would
+  // be worse than quoting none.
   const refinanceCandidateProduct =
-    ranking.ranked.find((r) => r.product === 'personal') ?? ranking.ranked[0] ?? null
+    ranking.ranked.find((r) => CONSOLIDATION_CAPABLE_PRODUCTS.includes(r.product)) ?? null
   const refinanceBuild = refinanceCandidateProduct
     ? built.find((b) => b.offer.product === refinanceCandidateProduct.product)!
     : null

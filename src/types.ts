@@ -140,6 +140,8 @@ export type BorrowerAnswers = {
   cashIncomeMonthly?: NumericAnswer<RupeesPerMonth>
   itrIncomeAnnual?: NumericAnswer<RupeesPerYear>
   bankCreditsMonthly?: NumericAnswer<RupeesPerMonth>
+  /** The portion the borrower is sure of, whatever the good months look like. */
+  guaranteedIncomeMonthly?: NumericAnswer<RupeesPerMonth>
   incomeProof?: Answer<IncomeProofType>
   incomeStability?: Answer<IncomeStability>
 
@@ -151,7 +153,10 @@ export type BorrowerAnswers = {
 
   /* What they already owe */
   existingEmiMonthly?: NumericAnswer<RupeesPerMonth>
+  hasCreditCards?: Answer<boolean>
   creditCardOutstanding?: NumericAnswer<Rupees>
+  /** A known lump coming in the next year - a wedding, a fee, a repair. */
+  upcomingExpenses12m?: NumericAnswer<Rupees>
   informalDebtOutstanding?: NumericAnswer<Rupees>
   informalDebtRateMonthly?: NumericAnswer<MonthlyRatePct>
   householdExpensesMonthly?: NumericAnswer<RupeesPerMonth>

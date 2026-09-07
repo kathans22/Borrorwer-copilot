@@ -15,7 +15,10 @@
  */
 
 import {
+  ASSUMED_PROOF_BY_EMPLOYMENT,
   CO_APPLICANT,
+  FIELD_DEFAULTS,
+  GUARANTEED_INCOME_OVERRIDES_RANGE_FLOOR,
   EMPLOYMENT_RECOGNITION_CAP_RATIO,
   INCOME_PROOF_RECOGNITION_RATIO,
   PROOF_FALLBACK_WITHOUT_FIGURE,
@@ -72,7 +75,10 @@ export function assessIncome(answers: BorrowerAnswers): IncomeAssessment {
   const constraints: ConstraintId[] = []
 
   const employmentType = readChoice<EmploymentType>(answers, 'employmentType')
-  const claimedProof = readChoice<IncomeProofType>(answers, 'incomeProof') ?? 'none'
+  const statedProof = readChoice<IncomeProofType>(answers, 'incomeProof')
+  // DEF-24 - assume the paperwork that goes with the work, at the weaker end.
+  const assumedProof = employmentType ? ASSUMED_PROOF_BY_EMPLOYMENT[employmentType] : 'none'
+  const claimedProof = statedProof ?? assumedProof
   const selfEmployed = isSelfEmployed(employmentType)
 
   const salaried = readNumeric(answers, 'salariedNetIncomeMonthly', 'income')
@@ -95,6 +101,16 @@ export function assessIncome(answers: BorrowerAnswers): IncomeAssessment {
       ),
     )
     wouldNarrow.push('itrIncomeAnnual')
+  }
+
+  if (statedProof === null && employmentType !== null) {
+    reasons.push(
+      reason(
+        FIELD_DEFAULTS.incomeProof.reasonTemplate.replace('{value}', describeProof(assumedProof)),
+        ['incomeProof'],
+      ),
+    )
+    wouldNarrow.push('incomeProof')
   }
 
   const itrMonthlyUnderwriting = itr?.stated ? annualToMonthly(itr.underwriting) : null
@@ -122,7 +138,25 @@ export function assessIncome(answers: BorrowerAnswers): IncomeAssessment {
     cappedByDeclared = true
   }
 
-  const safetyPrimary = primarySafety * (SAFETY_VIEW_RECOGNITION_RATIO as number)
+  // INC-14 - the borrower's own floor beats ours. A range collapsed at its
+  // bottom is a guess about the bad month; "forty is certain, eighty is a
+  // good month" is the borrower telling us where the floor actually is.
+  const guaranteed = readNumeric(answers, 'guaranteedIncomeMonthly', 'income')
+  const usesGuaranteedFloor =
+    GUARANTEED_INCOME_OVERRIDES_RANGE_FLOOR && (guaranteed?.stated ?? false)
+  const safetyBase = usesGuaranteedFloor ? guaranteed!.safety : primarySafety
+  const safetyPrimary = safetyBase * (SAFETY_VIEW_RECOGNITION_RATIO as number)
+
+  if (usesGuaranteedFloor) {
+    reasons.push(
+      reason(
+        `We are working from the ${rupees(guaranteed!.safety)} a month you said is certain, rather than guessing at your worst month from the range. Good months are welcome but nothing here depends on them.`,
+        ['guaranteedIncomeMonthly'],
+      ),
+    )
+  } else if (primarySafety > 0 && (cash?.range || salaried?.range)) {
+    wouldNarrow.push('guaranteedIncomeMonthly')
+  }
 
   // --- explain the primary income --------------------------------------
   if (employmentType === null) {

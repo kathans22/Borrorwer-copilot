@@ -76,6 +76,26 @@ export function minViableEmiFor(
   return emiFor(minTicket, midRatePct, maxTenureMonths)
 }
 
+/**
+ * How much of a stated incremental earning counts, and why (PUR-02).
+ * Null when the purpose does not allow an offset or nothing was stated -
+ * the engine never infers earning from the purpose alone (VRD-07).
+ */
+function productiveOffset(
+  answers: BorrowerAnswers,
+  purpose: LoanPurpose,
+): { stated: number; counted: number; alreadyHappening: boolean } | null {
+  const rules = PURPOSE_RULES[purpose]
+  if (!rules.allowsIncomeOffset) return null
+  const earning = readNumeric(answers, 'incrementalEarningMonthly', 'income')
+  if (!earning?.stated) return null
+  const alreadyHappening = readChoice<boolean>(answers, 'incrementalEarningAlreadyHappening') === true
+  const ratio = alreadyHappening
+    ? (rules.existingIncrementalRecognitionRatio as number)
+    : (rules.projectedIncrementalRecognitionRatio as number)
+  return { stated: earning.safety, counted: earning.safety * ratio, alreadyHappening }
+}
+
 export function decideVerdict(input: {
   answers: BorrowerAnswers
   income: IncomeAssessment
@@ -131,6 +151,22 @@ export function decideVerdict(input: {
         ['householdExpensesMonthly', 'rentMonthly', 'existingEmiMonthly', 'dependents'],
       ),
     )
+
+    // A borrower who told us the loan would earn deserves to be told why that
+    // does not rescue it, rather than having the answer ignored. VRD-06 is the
+    // reason - earning never lifts a household that cannot service the loan
+    // from what it already has - and saying so is the difference between a
+    // refusal and an explanation.
+    const offset = productiveOffset(answers, purpose)
+    if (offset) {
+      reasons.push(
+        reason(
+          `That holds even counting the loan's own earnings: of the ${rupees(offset.stated)} a month you expect, we would count ${rupees(offset.counted)}, because it is ${offset.alreadyHappening ? 'money already coming in' : 'a forecast rather than something you can point at yet'}. Earning can make a loan bigger; it cannot make an unaffordable one affordable.`,
+          ['incrementalEarningMonthly', 'incrementalEarningAlreadyHappening'],
+        ),
+      )
+    }
+
     return hardFail(reasons, constraints, wouldNarrow, input.refinance, minViableEmi, input.confidence)
   }
 
@@ -268,7 +304,7 @@ export function decideVerdict(input: {
       } else if (coverage >= (PRODUCTIVE_MIN_COVERAGE_RATIO as number) && !stressPassed) {
         reasons.push(
           reason(
-            `The ${rupees(earning.safety)} a month this is expected to earn covers the instalment ${coverage.toFixed(1)} times over, but it does not lift the answer: the stress case counts none of it, and a loan that only works while the new earning holds up is not one to take at full size.`,
+            `We count ${rupees(counted)} of the ${rupees(earning.safety)} a month you expect to earn, because it is ${alreadyHappening === true ? 'money already coming in' : 'a forecast rather than something you can point at yet'}. It covers the instalment ${coverage.toFixed(1)} times over, but it does not lift the answer: the stress case counts none of it, and a loan that only works while the new earning holds up is not one to take at full size.`,
             ['incrementalEarningMonthly', 'incomeStability'],
           ),
         )

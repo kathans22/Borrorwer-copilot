@@ -16,14 +16,33 @@ import {
   WIDENING_FACTOR,
   type OutputId,
 } from '../rules/rules.config'
+import { ALL_QUESTIONS } from '../questions/questions.config'
 import type { AnswerFieldId, Band, BorrowerAnswers } from '../types'
 import { isUnanswered } from './resolve'
+
+/**
+ * Fields this borrower would actually be asked about.
+ *
+ * Widening for a question that will never be put to them is not honest
+ * uncertainty - it is a band that can never close. A salaried borrower does
+ * not file business returns, so an unanswered ITR field is not a gap in what
+ * we know about them; it is a question that does not exist on their path.
+ */
+function applicableFields(answers: BorrowerAnswers): Set<AnswerFieldId> {
+  const out = new Set<AnswerFieldId>()
+  for (const q of ALL_QUESTIONS) if (q.appliesWhen(answers)) out.add(q.id)
+  return out
+}
 
 /** Which of an output's inputs the borrower has not settled. */
 export function unansweredFor(answers: BorrowerAnswers, output: OutputId): AnswerFieldId[] {
   const table = WIDENING_FACTOR[output]
+  const applicable = applicableFields(answers)
   return (Object.keys(table) as AnswerFieldId[]).filter(
-    (field) => !WIDENING_EXEMPT_FIELDS.includes(field) && isUnanswered(answers, field),
+    (field) =>
+      !WIDENING_EXEMPT_FIELDS.includes(field) &&
+      applicable.has(field) &&
+      isUnanswered(answers, field),
   )
 }
 

@@ -14,6 +14,7 @@ import {
   WOULD_NARROW_MAX_ITEMS,
   type OutputId,
 } from '../rules/rules.config'
+import { ALL_QUESTIONS } from '../questions/questions.config'
 import type { AnswerFieldId, BorrowerAnswers } from '../types'
 import { isUnanswered } from './resolve'
 
@@ -38,7 +39,13 @@ export function rankWouldNarrow(answers: BorrowerAnswers, output: OutputId): Ans
     impacts.set(field, Math.max(impacts.get(field) ?? 0, weight))
   }
 
+  // Never suggest a question this borrower would not be asked - a salaried
+  // applicant told to "file your GST returns" has been given a chore they
+  // cannot do.
+  const askable = new Set(ALL_QUESTIONS.filter((q) => q.appliesWhen(answers)).map((q) => q.id))
+
   return [...impacts.entries()]
+    .filter(([field]) => askable.has(field))
     .filter(([field]) => !WOULD_NARROW_EXCLUDES_ANSWERED || isUnanswered(answers, field))
     .sort((a, b) => b[1] - a[1])
     .slice(0, WOULD_NARROW_MAX_ITEMS)

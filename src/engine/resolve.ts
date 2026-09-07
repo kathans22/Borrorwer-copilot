@@ -14,6 +14,7 @@
 
 import {
   EXISTING_OBLIGATION_DEFAULT_RATIO_OF_INCOME,
+  GATE_ANSWERS_IMPLY_ZERO,
   EXPENSE_RANGE_COLLAPSE,
   FIELD_DEFAULTS,
   HOUSEHOLD_EXPENSE_DEFAULT,
@@ -97,6 +98,25 @@ export function isExplicitlyUnknown(answers: BorrowerAnswers, field: AnswerField
 export function isUnanswered(answers: BorrowerAnswers, field: AnswerFieldId): boolean {
   const a = answers[field]
   return a === undefined || 'unknown' in a
+}
+
+/**
+ * DEF-23 - Carry a gate answer through to the question behind it.
+ *
+ * "I have no credit cards" is an answer about the balance, not a silence
+ * about it. Without this the borrower would keep a widened band and a
+ * standing assumption for something they have already told us.
+ */
+export function normaliseAnswers(answers: BorrowerAnswers): BorrowerAnswers {
+  const out: Record<string, unknown> = { ...answers }
+  for (const [gate, implied] of Object.entries(GATE_ANSWERS_IMPLY_ZERO)) {
+    const gateAnswer = answers[gate as AnswerFieldId]
+    const alreadyAnswered = answers[implied as AnswerFieldId] !== undefined
+    if (!alreadyAnswered && gateAnswer !== undefined && 'value' in gateAnswer && gateAnswer.value === false) {
+      out[implied as string] = { value: 0 }
+    }
+  }
+  return out as BorrowerAnswers
 }
 
 /** Fill `{value}` in a DEF-* reason template and tag it to its field. */

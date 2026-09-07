@@ -197,6 +197,18 @@ export const RECOGNISED_INCOME_CAPPED_AT_DECLARED = true
  * Such a claim falls back to the bank-statements ratio until the number
  * arrives.
  */
+/**
+ * INC-14 - Where the borrower can say which part of their income is
+ * guaranteed, the safety view uses that figure rather than the bottom of
+ * their stated range.
+ *
+ * A range collapsed at its floor (INC-05) is a guess about the bad month.
+ * "Forty is certain, eighty is a good month" is not a guess - it is the
+ * borrower telling us where the floor actually is, and it is a better answer
+ * than any rule we could apply to the range on their behalf.
+ */
+export const GUARANTEED_INCOME_OVERRIDES_RANGE_FLOOR = true
+
 export const PROOF_REQUIRES_ITS_FIGURE = true
 export const PROOF_FALLBACK_WITHOUT_FIGURE: IncomeProofType = 'bank_statements_only'
 
@@ -340,6 +352,21 @@ export const SAFE_CARRY = {
  * only idea in it worth having.
  */
 export const AFFORDABILITY_RULES_ARE_INDEPENDENT = true
+
+/**
+ * AFF-16 - A known lump coming in the next year is spread across that year
+ * and treated as an obligation on the safety side.
+ *
+ * A borrower who knows about a wedding, a school fee or a roof repair has
+ * told us something a payslip never will. Ignoring it because it is not a
+ * monthly figure is how a household ends up with an instalment that works
+ * every month except the one that was always going to be difficult.
+ *
+ * It never touches the lender view: no underwriter asks, so pretending they
+ * do would misrepresent what the borrower will actually be offered.
+ */
+export const UPCOMING_EXPENSE_HORIZON_MONTHS: Months = months(12)
+export const UPCOMING_EXPENSES_AFFECT_SAFETY_VIEW_ONLY = true
 
 /**
  * AFF-15 - Which of the two numbers the borrower should actually use.
@@ -1000,6 +1027,21 @@ export const INFORMAL_DEBT_ASSUMED_INTEREST_ONLY = true
  * cost of staying, and the break-even month found by walking the cumulative
  * cost of each path rather than by dividing.
  */
+/**
+ * REF-13 - Only products that can actually consolidate debt may be a
+ * refinance target.
+ *
+ * A vehicle loan cannot pay off a moneylender: the money can only buy the
+ * vehicle. Without this the engine will happily route a consolidation to
+ * whatever product happens to rank first, and quote a saving the borrower
+ * could never realise.
+ */
+export const CONSOLIDATION_CAPABLE_PRODUCTS: SupportedProduct[] = [
+  'personal',
+  'lap',
+  'business_unsecured',
+]
+
 export const REFINANCE_COMPARISON_METHOD = 'cumulative_cost_including_residual_principal' as const
 
 /* =====================================================================
@@ -1264,11 +1306,12 @@ export const FIELD_DEFAULTS = {
     rationale: 'neutral_on_eligibility',
   },
   incomeProof: {
-    value: 'none',
+    value: null,
     unit: '',
     reasonTemplate:
-      'We assumed you have no income documents to hand, so nothing is counted towards what a lender will lend. This is the single biggest lever on your number.',
+      'We assumed the paperwork that usually goes with how you earn — {value} — and nothing stronger. If you have more than that, saying so is the single biggest lever on your number.',
     rationale: 'neutral_on_eligibility',
+    derivedFrom: 'DEF-24, from employment type',
   },
   hasCoApplicant: {
     value: false,
@@ -1329,6 +1372,47 @@ export const FIELD_DEFAULTS = {
     rationale: 'no_default_uses_distribution',
   },
 } satisfies Partial<Record<AnswerFieldId, DefaultSpec>>
+
+/**
+ * DEF-23 - An explicit "no" to a gate question answers the question behind
+ * it.
+ *
+ * A borrower who says they have no credit cards has told us the balance is
+ * nothing. Treating that as an unanswered amount would leave an assumption
+ * on the books that the borrower has already cleared up, and would leave
+ * their band wider than their answers deserve.
+ *
+ * This is the opposite of a silent default: it is a stated fact being
+ * carried to where it belongs.
+ */
+export const GATE_ANSWERS_IMPLY_ZERO: Partial<Record<AnswerFieldId, AnswerFieldId>> = {
+  hasCreditCards: 'creditCardOutstanding',
+  hasCoApplicant: 'coApplicantIncomeMonthly',
+}
+
+/**
+ * DEF-24 - Assumed income proof, from how the borrower earns.
+ *
+ * Defaulting proof to "nothing" made the must-set produce no answer at all:
+ * with no recognised income, no product is available and all four outputs
+ * collapse to zero. That is not conservatism, it is uselessness - and it
+ * fails the rule that the opening questions alone must produce a complete
+ * assessment.
+ *
+ * So the paperwork that usually goes with a way of earning is assumed, at
+ * the weaker end of what it implies. A formally salaried borrower has
+ * payslips by definition. Everybody else is assumed to have bank statements
+ * and nothing better - not the return they may well have filed - so
+ * confirming the stronger document always improves the answer and never
+ * worsens it.
+ */
+export const ASSUMED_PROOF_BY_EMPLOYMENT: Record<EmploymentType, IncomeProofType> = {
+  salaried_formal: 'salary_slips',
+  salaried_informal: 'bank_statements_only',
+  self_employed_documented: 'bank_statements_only',
+  self_employed_cash: 'bank_statements_only',
+  daily_wage: 'bank_statements_only',
+}
 
 /** DEF-21 - Every default that fires must produce a Reason the borrower sees. */
 export const DEFAULT_IS_NEVER_SILENT = true
@@ -1715,13 +1799,16 @@ export const WIDENING_FACTOR: Record<OutputId, Partial<Record<AnswerFieldId, num
     requestedAmount: 0.03,
     requestedTenure: 0.03,
     repaymentHistory: 0.05,
+    quotedRate: 0.04,
     bouncedEmisLast12m: 0.03,
+    existingLoanRate: 0.03,
     timeInCurrentWork: 0.02,
   },
 
   maxAmount: {
     incomeProof: 0.15,
     employmentType: 0.15,
+    guaranteedIncomeMonthly: 0.1,
     householdExpensesMonthly: 0.12,
     existingEmiMonthly: 0.1,
     rentMonthly: 0.08,
@@ -1731,7 +1818,15 @@ export const WIDENING_FACTOR: Record<OutputId, Partial<Record<AnswerFieldId, num
     dependents: 0.05,
     hasCoApplicant: 0.05,
     savingsBuffer: 0.05,
+    upcomingExpenses12m: 0.05,
+    coApplicantIncomeProof: 0.04,
+    downPaymentAvailable: 0.04,
     cityTier: 0.04,
+    creditCardOutstanding: 0.04,
+    existingLoanOutstanding: 0.04,
+    incomeStability: 0.03,
+    propertyKind: 0.03,
+    timeInCurrentWork: 0.03,
   },
 
   emiCeiling: {
@@ -1741,9 +1836,13 @@ export const WIDENING_FACTOR: Record<OutputId, Partial<Record<AnswerFieldId, num
     incomeProof: 0.1,
     employmentType: 0.1,
     informalDebtOutstanding: 0.08,
+    guaranteedIncomeMonthly: 0.12,
+    upcomingExpenses12m: 0.07,
     savingsBuffer: 0.06,
     dependents: 0.06,
+    creditCardOutstanding: 0.05,
     cityTier: 0.05,
+    existingLoanOutstanding: 0.04,
     incomeStability: 0.04,
   },
 }
@@ -1882,6 +1981,17 @@ export const WOULD_NARROW_DISTRIBUTION_IMPACT: Record<
  */
 export const WOULD_NARROW_EXCLUDES_ANSWERED = true
 
+/**
+ * NAR-04 - Weight added when a field is already named in an output's own
+ * `wouldNarrow` list, used to order the next question.
+ *
+ * The static table says what a field is worth in general; the live result
+ * says what it is worth to this borrower right now. This tips the ordering
+ * towards the second without discarding the first, so that the next question
+ * is the one that would actually move *their* numbers.
+ */
+export const ORDERING_BONUS_FOR_LIVE_NARROWING = 0.25
+
 /* =====================================================================
  * ASR - Assertions
  *
@@ -1950,6 +2060,7 @@ export const RULES = {
     ITR_ANNUAL_TO_MONTHLY_DIVISOR,
     CO_APPLICANT,
     RECOGNISED_INCOME_CAPPED_AT_DECLARED,
+    GUARANTEED_INCOME_OVERRIDES_RANGE_FLOOR,
     PROOF_REQUIRES_ITS_FIGURE,
     PROOF_FALLBACK_WITHOUT_FIGURE,
   },
@@ -1964,6 +2075,8 @@ export const RULES = {
     BUFFER_ACCRUAL_CAP_RATIO_OF_SURPLUS,
     SAFE_CARRY,
     AFFORDABILITY_RULES_ARE_INDEPENDENT,
+    UPCOMING_EXPENSE_HORIZON_MONTHS,
+    UPCOMING_EXPENSES_AFFECT_SAFETY_VIEW_ONLY,
     LEAD_WITH_LOWER_OF_THE_TWO_AMOUNTS,
     USE_WHICH_REASON_MUST_NAME_BINDING_TERM,
   },
@@ -2005,6 +2118,7 @@ export const RULES = {
     CREDIT_CARD_ASSUMED_ANNUAL_RATE_PCT,
     INFORMAL_DEBT_ASSUMED_INTEREST_ONLY,
     REFINANCE_COMPARISON_METHOD,
+    CONSOLIDATION_CAPABLE_PRODUCTS,
   },
   verdict: {
     VERDICT_CUTOFFS,
@@ -2025,6 +2139,8 @@ export const RULES = {
     FIELD_DEFAULTS,
     DEFAULT_IS_NEVER_SILENT,
     ZERO_DEFAULT_ALLOWED_ONLY_FOR,
+    ASSUMED_PROOF_BY_EMPLOYMENT,
+    GATE_ANSWERS_IMPLY_ZERO,
   },
   apr: {
     APR_METHOD,
@@ -2064,6 +2180,7 @@ export const RULES = {
     WOULD_NARROW_MAX_ITEMS,
     WOULD_NARROW_DISTRIBUTION_IMPACT,
     WOULD_NARROW_EXCLUDES_ANSWERED,
+    ORDERING_BONUS_FOR_LIVE_NARROWING,
   },
   assertions: {
     ASSERT_NO_UNJUSTIFIED_ZERO_COERCION,
