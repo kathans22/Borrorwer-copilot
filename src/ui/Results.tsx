@@ -23,10 +23,12 @@ import { Verdict } from './results/Verdict'
 export function Results({
   answers,
   onBack,
+  onCard,
   onClear,
 }: {
   answers: BorrowerAnswers
   onBack: () => void
+  onCard: () => void
   onClear: () => void
 }) {
   const { result, trace } = computeWithTrace(answers)
@@ -49,6 +51,10 @@ export function Results({
       {!saidNo && <Actions actions={result.actions} />}
 
       <div className="space-y-3 border-t border-stone-200 pt-6">
+        <Button onClick={onCard}>Get my card for the counter</Button>
+        <p className="text-center text-sm leading-relaxed text-stone-500">
+          One screen to hold up when somebody quotes you a rate.
+        </p>
         <Button onClick={onBack} variant="secondary">
           Answer more questions to sharpen this
         </Button>

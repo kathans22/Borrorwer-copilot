@@ -403,6 +403,40 @@ Scored under product craft, so treated as a spec rather than as taste.
   writes explanation copy of its own — if a number has no reason behind it,
   that is a gap in the engine and should be visible as one.
 
+## CARD — The negotiation card
+
+One screen a borrower holds up at a counter, read under pressure with a
+salesperson watching. The comparator is the point of it: *"that seems high"* is
+an opinion, and *"that is ₹259 a month more than the best rate I should get,
+about ₹15,548 over five years"* is a negotiation.
+
+| ID | What | Value | Why | Source |
+|---|---|---|---|---|
+| CARD-01 | Questions to ask the lender, generated from this borrower's own gaps | 8 in the catalogue, each tied to an unanswered field or always-worth-asking | A gap in our answers is usually a gap the lender is relying on. Each is written to be answerable only with a number or a yes — "is that rate fixed?" cannot be talked around; "tell me about your rates" can. Only fires for questions this borrower would actually be asked, so somebody with no property is never told to ask about a valuation. | My judgement |
+| CARD-02 | How many questions | 3 | More than that and nobody asks any of them. | My judgement |
+| CARD-03 | Actions carried onto the card | 2 | So the card is worth something even when the answer was "not yet". | My judgement |
+| CARD-04 | How a quote is compared | Same amount, same length of loan, total paid plus fees | A rate on its own is not a price. The fee is counted because it comes out of the money before it reaches the borrower — so a lower rate with a bigger fee can be the worse offer, which is exactly the trade a counter is good at hiding. | Arithmetic |
+| CARD-05 | When the offer is fair, say so | Plainly | Manufacturing a grievance would be the easiest way to make this feel useful and the fastest way to make it worthless. A borrower told once that an offer is fair will trust the card the next time it says otherwise. | Design decision |
+| CARD-06 | When the fair band is too wide to judge against | Above 6 percentage points | A borrower with an unchecked credit score gets a band spanning thirteen points, and almost any quote falls inside it. Calling that "a fair offer" would be the app lending its authority to a number nobody has checked. Instead the card says it cannot judge yet and names the one thing that would settle it. **Found by running the gate** — a 14% quote was being called fair against an 11–24% band. | Design decision |
+| CARD-07 | The rupee figure is measured against the *best* fair rate | Band low, not band high | That is the number worth arguing over. Comparing against the top of the band answers "is this outright unfair", which is a lower bar and a weaker position — and for an unchecked score it answers nothing at all. | Design decision |
+
+**Worked example, checked by hand.** Priya, ₹1,69,832 over 5 years, quoted 14%
+with a 2% fee:
+
+```
+  EMI at the 14% quote            ₹3,952
+  EMI at the best fair rate (11%) ₹3,693
+  difference                        ₹259 a month
+  over 60 months                 ₹15,548
+```
+
+Engine and an independent calculation from the amortisation formula agree to
+the rupee. Because her credit score has never been checked, the card does *not*
+call this unfair — it reports that it cannot judge yet, and shows her what the
+gap is worth so she goes and checks.
+
+---
+
 ---
 
 ## Worked example: the two affordability rules disagree

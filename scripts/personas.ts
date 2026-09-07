@@ -41,7 +41,7 @@ const unknown = { unknown: true } as const
 // metro rent, a dependant, and no savings buffer. These are the figures
 // the worked example in RULES.md uses.
 // =====================================================================
-const priya: BorrowerAnswers = {
+export const priya: BorrowerAnswers = {
   productType: v('personal'),
   loanPurpose: v('consumption'),
   requestedAmount: { value: 300_000 as Rupees },
@@ -603,6 +603,17 @@ function checkTightens(): boolean {
 }
 
 const flags = process.argv.slice(2)
+
+/**
+ * Only run the command line when this file is what was invoked. Importing the
+ * personas from another script - the negotiation card check, say - should not
+ * print three assessments as a side effect.
+ */
+const runAsCli = (process.argv[1] ?? '').includes('personas')
+
+if (!runAsCli) {
+  // Imported for the personas themselves; nothing to print.
+} else
 
 if (flags.includes('--compare')) {
   const results = [compare('Priya', priya), compare('Ravi', ravi), compare('Anita', anita)]

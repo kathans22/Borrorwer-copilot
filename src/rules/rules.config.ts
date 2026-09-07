@@ -2042,6 +2042,139 @@ export const ZERO_COERCION_JUSTIFIED: Partial<Record<AnswerFieldId, string>> = {
 export const ASSERT_EVERY_DEFAULT_HAS_A_REASON = true
 
 /* =====================================================================
+ * CARD - The negotiation card
+ *
+ * One screen a borrower holds up at a counter, read under pressure with a
+ * salesperson watching. Everything on it is either a number the borrower has
+ * decided in advance, or a question that costs the lender something to
+ * dodge.
+ *
+ * The comparator is the point of it. A borrower who can say "that is 2.4
+ * points above fair for someone like me, which is about 38,000 rupees more
+ * over five years" is negotiating. One who can only say "that seems high"
+ * is not.
+ * ===================================================================== */
+
+/**
+ * CARD-01 - Questions to ask the lender, generated from this borrower's own
+ * gaps rather than from a generic list.
+ *
+ * `gap` names the unanswered field that makes the question worth asking. A
+ * question with `gap: null` is always worth asking, and is used to fill the
+ * three when the borrower has few gaps left.
+ *
+ * They are written to be answerable only with a number or a yes. "Is that
+ * rate fixed?" cannot be talked around; "tell me about your rates" can.
+ */
+export const LENDER_QUESTIONS: ReadonlyArray<{
+  gap: AnswerFieldId | null
+  question: string
+  because: string
+}> = [
+  {
+    gap: 'quotedProcessingFee',
+    question: 'What is your processing fee, and is it already inside the rate you just quoted me?',
+    because: 'A fee taken out before the money reaches you costs more than the rate suggests.',
+  },
+  {
+    gap: 'creditScore',
+    question: 'What credit score are you pricing me at?',
+    because: 'You have not checked yours yet, so this tells you whether their number matches reality.',
+  },
+  {
+    gap: 'incomeProof',
+    question: 'Which documents would let you count more of my income?',
+    because: 'The answer is usually one form, and it moves the amount more than anything else.',
+  },
+  {
+    gap: 'propertyTitleClear',
+    question: 'What value are you putting on my property, who does the valuation, and who pays for it?',
+    because: 'The valuation sets your ceiling, and the charge for it is often left unsaid.',
+  },
+  {
+    gap: null,
+    question: 'Is this rate fixed for the whole term, or can it move?',
+    because: 'A rate that can move turns a payment you checked into one you did not.',
+  },
+  {
+    gap: null,
+    question: 'What would it cost me to close this loan early?',
+    because: 'It decides whether you can leave if something better appears.',
+  },
+  {
+    gap: null,
+    question: 'What is the total I will have paid by the end?',
+    because: 'One number, and the hardest one to make sound small.',
+  },
+  {
+    gap: null,
+    question: 'Is any insurance being added, and can I take the loan without it?',
+    because: 'Bundled cover is common, often optional, and rarely mentioned first.',
+  },
+]
+
+/** CARD-02 - Three. More than that and nobody asks any of them. */
+export const MAX_LENDER_QUESTIONS = 3
+
+/**
+ * CARD-03 - How much the borrower can be expected to hold in their head at a
+ * counter. The card carries the two most useful next steps, so it is worth
+ * something even when the answer was "not yet".
+ */
+export const MAX_CARD_ACTIONS = 2
+
+/**
+ * CARD-04 - How a quote is compared with the fair band.
+ *
+ * Two figures, because a rate on its own is not a price. The gap in points
+ * is what the borrower argues with; the gap in rupees over the whole term is
+ * what makes them willing to argue. Both are computed against the same
+ * amount and the same length of loan, so nothing is being compared to
+ * something it is not.
+ *
+ * The fee difference is counted too - it is taken out of the money before it
+ * reaches them, so a lower rate with a bigger fee can be the worse offer,
+ * and that is exactly the trade a counter is good at hiding.
+ */
+export const QUOTE_COMPARISON_METHOD = 'same_amount_same_term_total_paid_plus_fees' as const
+
+/**
+ * CARD-05 - When a quote sits inside the fair band, the card says so.
+ *
+ * Manufacturing a grievance would be the easiest way to make this feel
+ * useful and the fastest way to make it worthless. "This is a fair offer" is
+ * a real output, and a borrower who has been told it once will trust the
+ * card the next time it says otherwise.
+ */
+export const SAY_SO_WHEN_THE_OFFER_IS_FAIR = true
+
+/**
+ * CARD-06 - When the fair band is too wide to judge a quote against.
+ *
+ * A borrower who has not had their credit score checked gets a band spanning
+ * thirteen points. Almost any quote falls inside it, and calling that "a
+ * fair offer" would be worse than useless - it would be the app lending its
+ * authority to a number nobody has actually checked.
+ *
+ * Past this width the card says plainly that it cannot judge the offer yet,
+ * and names the one thing that would let it. That is the honest answer, and
+ * it happens to be the most useful one: it sends the borrower to check their
+ * score before they sign.
+ */
+export const CANNOT_JUDGE_FAIRNESS_ABOVE_BAND_WIDTH_PCT_POINTS = 6
+
+/**
+ * CARD-07 - The rupee figure is always measured against the *best* rate the
+ * borrower should be able to get, not the worst.
+ *
+ * That is the number worth arguing over. Comparing against the top of the
+ * band answers "is this outright unfair", which is a lower bar and a weaker
+ * position to negotiate from - and for a borrower with an unchecked score it
+ * answers nothing at all.
+ */
+export const COMPARE_RUPEES_AGAINST_BEST_FAIR_RATE = true
+
+/* =====================================================================
  * PRV - What is kept, and where
  *
  * The brief says no personal data is stored. Our reading of that, recorded
@@ -2229,6 +2362,15 @@ export const RULES = {
     ASSERT_NO_UNJUSTIFIED_ZERO_COERCION,
     ZERO_COERCION_JUSTIFIED,
     ASSERT_EVERY_DEFAULT_HAS_A_REASON,
+  },
+  card: {
+    LENDER_QUESTIONS,
+    MAX_LENDER_QUESTIONS,
+    MAX_CARD_ACTIONS,
+    QUOTE_COMPARISON_METHOD,
+    SAY_SO_WHEN_THE_OFFER_IS_FAIR,
+    CANNOT_JUDGE_FAIRNESS_ABOVE_BAND_WIDTH_PCT_POINTS,
+    COMPARE_RUPEES_AGAINST_BEST_FAIR_RATE,
   },
   privacy: {
     KEEP_ANSWERS_ON_DEVICE,
