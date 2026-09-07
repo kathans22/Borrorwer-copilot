@@ -11,13 +11,18 @@
 import { computeWithTrace } from '../src/engine/index'
 import { percent, rupees, months as monthsText } from '../src/engine/format'
 import { bareLabel } from '../src/engine/productRouting'
+import { ADDITIONAL_QUESTIONS, ALL_QUESTIONS, MUST_FIELDS } from '../src/questions/questions.config'
+import { fullPath } from '../src/questions/order'
+import type { OutputId } from '../src/rules/rules.config'
 import type {
+  AnnualRatePct,
   AnswerFieldId,
   BorrowerAnswers,
   Count,
   CreditScore,
   Months,
   MonthlyRatePct,
+  Percent,
   Rupees,
   RupeesPerMonth,
   RupeesPerYear,
@@ -52,19 +57,35 @@ const priya: BorrowerAnswers = {
   incomeStability: v('stable'),
 
   rentMonthly: { value: 8_000 as RupeesPerMonth },
+  savingsBuffer: { value: 15_000 as Rupees },
+  // The wedding is what she is borrowing for, so it is not also a
+  // separate upcoming cost.
+  upcomingExpenses12m: { value: 0 as Rupees },
   // householdExpensesMonthly and existingEmiMonthly deliberately unanswered,
   // so the DEF-01 and DEF-03 defaults fire and announce themselves.
 
+  hasCoApplicant: v(false),
+  hasCreditCards: v(true),
+  creditCardOutstanding: { value: 22_000 as Rupees },
+  informalDebtOutstanding: { value: 0 as Rupees },
+
   creditScore: unknown,
+  repaymentHistory: v('clean'),
+  bouncedEmisLast12m: { value: 0 as Count },
+
+  lenderType: v('private_bank'),
+  quotedRate: { value: 16 as AnnualRatePct },
+  quotedProcessingFee: { value: 2 as Percent },
 }
 
 // =====================================================================
 // Ravi - 42, shopkeeper, wants 15 lakh unsecured for the business
 //
-// Takes about 55,000 a month over the counter and declares 4.2 lakh a
-// year. INC-12 is what bites: a lender counts the declared figure. His
-// wife earns 18,000 with no paperwork, which counts for the household
-// and not for the lender. He owns the shop premises outright.
+// Takes between 40,000 and 80,000 a month over the counter depending on
+// the season, and declares 4.2 lakh a year. INC-12 is what bites: a
+// lender counts the declared figure, not the takings. His wife earns
+// 18,000 with no paperwork, which counts for the household and not for
+// the lender. He owns the shop premises outright.
 // =====================================================================
 const ravi: BorrowerAnswers = {
   productType: v('business_unsecured'),
@@ -77,7 +98,8 @@ const ravi: BorrowerAnswers = {
   employmentType: v('self_employed_cash'),
   timeInCurrentWork: { value: 120 as Months },
 
-  cashIncomeMonthly: { value: 55_000 as RupeesPerMonth },
+  cashIncomeMonthly: range(40_000 as RupeesPerMonth, 80_000 as RupeesPerMonth),
+  guaranteedIncomeMonthly: { value: 40_000 as RupeesPerMonth },
   itrIncomeAnnual: { value: 420_000 as RupeesPerYear },
   incomeProof: v('itr'),
   incomeStability: v('seasonal'),
@@ -96,8 +118,21 @@ const ravi: BorrowerAnswers = {
   propertyKind: v('commercial'),
   propertyTitleClear: v(true),
 
+  existingLoanOutstanding: { value: 300_000 as Rupees },
+  existingLoanRate: { value: 18 as AnnualRatePct },
+  existingLoanRemainingTenure: { value: 42 as Months },
+  hasCreditCards: v(false),
+  informalDebtOutstanding: { value: 0 as Rupees },
+  savingsBuffer: { value: 60_000 as Rupees },
+  upcomingExpenses12m: { value: 50_000 as Rupees },
+
   creditScore: { value: 720 as CreditScore },
   repaymentHistory: v('clean'),
+  bouncedEmisLast12m: { value: 0 as Count },
+
+  lenderType: v('nbfc'),
+  quotedRate: { value: 21 as AnnualRatePct },
+  quotedProcessingFee: { value: 2.5 as Percent },
 
   incrementalEarningMonthly: { value: 22_000 as RupeesPerMonth },
   incrementalEarningAlreadyHappening: v(false),
@@ -110,7 +145,7 @@ const ravi: BorrowerAnswers = {
 // the thing actually costing her money, and REF-09 says that is what the
 // answer should lead with.
 // =====================================================================
-const anita: BorrowerAnswers = {
+export const anita: BorrowerAnswers = {
   productType: v('two_wheeler_ev'),
   loanPurpose: v('productive'),
   requestedAmount: { value: 110_000 as Rupees },
@@ -127,10 +162,18 @@ const anita: BorrowerAnswers = {
 
   rentMonthly: { value: 6_000 as RupeesPerMonth },
   savingsBuffer: { value: 0 as Rupees },
+  guaranteedIncomeMonthly: { value: 22_000 as RupeesPerMonth },
+  upcomingExpenses12m: { value: 25_000 as Rupees },
+  hasCoApplicant: v(false),
 
   informalDebtOutstanding: { value: 80_000 as Rupees },
   informalDebtRateMonthly: { value: 3 as MonthlyRatePct },
+  hasCreditCards: v(true),
   creditCardOutstanding: { value: 18_000 as Rupees },
+  bouncedEmisLast12m: { value: 1 as Count },
+
+  lenderType: v('fintech'),
+  quotedRate: { value: 24 as AnnualRatePct },
 
   hasCreditHistory: v(false),
 
@@ -289,24 +332,6 @@ function run(name: string, answers: BorrowerAnswers): void {
 // something other than what it says it does.
 // =====================================================================
 
-/**
- * The opening questions - what the tool would ask before it could say
- * anything at all. Prompt 5 builds the real question graph and will own
- * this list; until then it lives here so the comparison has something to
- * compare against.
- */
-const MUST_FIELDS: AnswerFieldId[] = [
-  'productType',
-  'loanPurpose',
-  'requestedAmount',
-  'age',
-  'cityTier',
-  'employmentType',
-  'incomeProof',
-  'salariedNetIncomeMonthly',
-  'cashIncomeMonthly',
-]
-
 function mustOnly(answers: BorrowerAnswers): BorrowerAnswers {
   const out: Record<string, unknown> = {}
   for (const field of MUST_FIELDS) {
@@ -415,7 +440,171 @@ function compare(name: string, answers: BorrowerAnswers): boolean {
   return allNarrow
 }
 
-if (process.argv.slice(2).includes('--compare')) {
+// =====================================================================
+// --questions : the exact path each borrower would walk
+//
+// The three lists should differ in content and in length. If they do not,
+// appliesWhen is not doing its job and the graph is a form with extra steps.
+// =====================================================================
+
+function showQuestions(name: string, answers: BorrowerAnswers): number {
+  const path = fullPath(answers)
+  const must = path.filter((q) => q.tier === 'must')
+  const additional = path.filter((q) => q.tier === 'additional')
+
+  heading(name + ' - questions, in the order they would be asked')
+  console.log('  %d questions: %d must, %d additional', path.length, must.length, additional.length)
+  console.log()
+
+  path.forEach((q, i) => {
+    const impact = q.tier === 'must' ? 'must' : q.impact.toFixed(2)
+    console.log(
+      '  %s %s %s',
+      String(i + 1).padStart(3) + '.',
+      impact.padStart(6),
+      q.prompt,
+    )
+    console.log('        %s%s', ''.padEnd(6), '[' + q.id + '] tightens: ' + q.tightens.join(', '))
+  })
+
+  const skipped = ALL_QUESTIONS.filter((q) => !path.some((p) => p.id === q.id))
+  if (skipped.length > 0) {
+    console.log()
+    console.log('  not asked (appliesWhen excluded them):')
+    for (const q of skipped) console.log('    - %s [%s]', q.prompt, q.id)
+  }
+  return path.length
+}
+
+// =====================================================================
+// --tightens : every additional question must move something
+//
+// For each additional question, take a borrower who answered it, remove
+// that one answer, and check that at least one output actually moved. A
+// question that changes nothing is a question that wastes an afternoon.
+// =====================================================================
+
+type Snapshot = {
+  verdict: string
+  confidence: string
+  /** The verdict has no band, so what changes about it is what it says. */
+  verdictReasons: string
+  bands: Record<OutputId, [number, number]>
+}
+
+function snapshot(answers: BorrowerAnswers): Snapshot {
+  const { result } = computeWithTrace(answers)
+  return {
+    verdict: result.verdict.value,
+    confidence: result.verdict.confidence,
+    verdictReasons: result.verdict.reasons.map((r) => r.text).join('|'),
+    bands: {
+      verdict: [0, 0],
+      maxAmount: [
+        result.maxAmount.borrowerSafe.band.low as number,
+        result.maxAmount.borrowerSafe.band.high as number,
+      ],
+      fairRate: [result.fairRate.band.low as number, result.fairRate.band.high as number],
+      emiCeiling: [
+        result.emiCeiling.band.low as number,
+        result.emiCeiling.band.high as number,
+      ],
+    },
+  }
+}
+
+function without(answers: BorrowerAnswers, field: AnswerFieldId): BorrowerAnswers {
+  const out: Record<string, unknown> = { ...answers }
+  delete out[field]
+  return out as BorrowerAnswers
+}
+
+/** Did this output move at all - either end of the band, to the rupee? */
+function moved(a: Snapshot, b: Snapshot, output: OutputId): boolean {
+  if (output === 'verdict') {
+    return (
+      a.verdict !== b.verdict ||
+      a.confidence !== b.confidence ||
+      a.verdictReasons !== b.verdictReasons
+    )
+  }
+  const [al, ah] = a.bands[output]
+  const [bl, bh] = b.bands[output]
+  // Exact comparison: the engine is deterministic, so anything that is not
+  // bit-identical is a real change. A rupee tolerance would hide a rate band
+  // moving by a third of a point.
+  return al !== bl || ah !== bh
+}
+
+function checkTightens(): boolean {
+  const subjects: Array<[string, BorrowerAnswers]> = [
+    ['Priya', priya],
+    ['Ravi', ravi],
+    ['Anita', anita],
+  ]
+
+  heading('tightens - does each additional question actually move a band?')
+  console.log('  question                            claims          verified by     result')
+  console.log('  ' + rule().slice(2))
+
+  let allHold = true
+
+  for (const q of ADDITIONAL_QUESTIONS) {
+    // A question can only be tested against somebody who answered it and to
+    // whom it applies. Where several qualify, take one it demonstrably moves
+    // - a gate question like "do you have cards" only bites on the borrower
+    // who answered no.
+    const candidates = subjects.filter(
+      ([, a]) => a[q.id] !== undefined && q.appliesWhen(without(a, q.id)),
+    )
+    const subject =
+      candidates.find(([, a]) => {
+        const b = snapshot(a)
+        const c = snapshot(without(a, q.id))
+        return q.tightens.some((o) => moved(b, c, o))
+      }) ?? candidates[0]
+
+    if (!subject) {
+      allHold = false
+      console.log(
+        '  %s %s %s %s',
+        q.id.padEnd(35),
+        q.tightens.join(',').padEnd(15),
+        '-'.padEnd(15),
+        'NO SUBJECT',
+      )
+      continue
+    }
+
+    const [who, answers] = subject
+    const before = snapshot(answers)
+    const after = snapshot(without(answers, q.id))
+    const movedOutputs = q.tightens.filter((o) => moved(before, after, o))
+    const ok = movedOutputs.length > 0
+    if (!ok) allHold = false
+
+    console.log(
+      '  %s %s %s %s',
+      q.id.padEnd(35),
+      q.tightens.join(',').padEnd(15),
+      who.padEnd(15),
+      ok ? 'moves ' + movedOutputs.join(',') : 'MOVES NOTHING',
+    )
+  }
+
+  console.log()
+  console.log(
+    '  ' +
+      (allHold
+        ? 'PASS - every additional question earns its place'
+        : 'FAIL - a question claims to tighten something it does not'),
+  )
+  return allHold
+}
+
+const flags = process.argv.slice(2)
+
+if (flags.includes('--compare')) {
   const results = [compare('Priya', priya), compare('Ravi', ravi), compare('Anita', anita)]
   console.log()
   console.log(rule('='))
@@ -426,6 +615,23 @@ if (process.argv.slice(2).includes('--compare')) {
     process.exitCode = 1
   }
   console.log(rule('='))
+  console.log()
+} else if (flags.includes('--questions')) {
+  const counts = [
+    showQuestions('Priya', priya),
+    showQuestions('Ravi', ravi),
+    showQuestions('Anita', anita),
+  ]
+  console.log()
+  console.log(rule('='))
+  console.log('  path lengths: Priya %d, Ravi %d, Anita %d', counts[0], counts[1], counts[2])
+  if (new Set(counts).size === 1) {
+    console.log('  all three paths are the same length - check appliesWhen.')
+  }
+  console.log(rule('='))
+  console.log()
+} else if (flags.includes('--tightens')) {
+  if (!checkTightens()) process.exitCode = 1
   console.log()
 } else {
   run('Priya', priya)
