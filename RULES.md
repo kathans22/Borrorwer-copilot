@@ -58,6 +58,7 @@ working for the lender.
 | INC-10 | Co-applicant obligations | Their existing EMIs join the obligation side | Half a household's income is no use if the other half of its debt is invisible. | My judgement |
 | INC-11 | When a co-applicant is counted | Only when the borrower has said there is one | Never inferred from marital status or anything else. | My judgement |
 | INC-12 | Recognised income capped at declared income | Where a return is filed, the lender view never exceeds it | Having told the tax authority one number, a borrower cannot ask a lender to believe a larger one. This is the rule that separates the two views most sharply: a shopkeeper taking ₹55,000 a month with ₹35,000 on the return has a safety income of ₹55,000 and a recognised income of ₹35,000, and every eligibility figure is built on the smaller one. | My judgement |
+| INC-13 | Proof is only as good as the figure behind it | A claimed return with no amount falls back to the bank-statements ratio | Otherwise the weakest possible answer produces the strongest possible recognition, and a borrower looks better *before* handing over the figure than after — which is the wrong way round. | My judgement |
 
 ## AFF — Affordability
 
@@ -308,6 +309,57 @@ money, and it is the behaviour this tool exists in opposition to.
 | RTE-04 | The stated product | Stays on screen with its own numbers | The borrower can check the comparison rather than take it on trust. | Design constraint |
 | RTE-05 | What they give up, per route | e.g. unsecured business → LAP: *"Your premises become the security. The rate is far lower and the amount far higher, but if this loan goes wrong you can lose the shop, and that is a slower, harder failure than a missed instalment on an unsecured loan."* | Written to be read aloud to somebody about to sign, not to satisfy a compliance checkbox. | Design constraint |
 | RTE-06 | Silent rerouting | Never, under any circumstances | | Design constraint |
+
+## WID — Band widening
+
+A band's width is computed from what the borrower has *not* told us, never
+assigned. With only the opening questions answered every band should be
+visibly wide; each further answer removes its own contribution and the band
+tightens. A factor is a fraction of the band's own centre, added to each side,
+and they are additive.
+
+| ID | What | Value | Why | Source |
+|---|---|---|---|---|
+| WID-01 | Widening factor per unanswered field, per output | e.g. on `maxAmount`: income proof 0.15, employment 0.15, household spending 0.12, existing EMIs 0.10, rent 0.08, ITR 0.08, informal debt 0.07, property 0.06, dependants 0.05, co-applicant 0.05, savings 0.05, city tier 0.04. On `emiCeiling` the household terms dominate; on `fairRate` the fee and tenure terms do | Relative judgements rather than measurements. What matters is the ordering: household spending moves the affordability numbers more than the number of dependants does, and income documentation moves the lender numbers most of all. | My judgement |
+| WID-02 | Fields exempt from widening | credit score · credit history · lender type | These already carry their own distribution elsewhere — CRD-08 prices an unknown score as the union of every tier, PRD-08 spans lender types market-wide. A widening factor on top would charge the borrower twice for one missing fact. The list exists so that an exemption reads as a decision rather than an oversight. | Design constraint |
+| WID-03 | Cap on total widening | 0.90 of the centre | Past this the low end collapses to nothing and the high end is fantasy. The honest message stops being a wider number and becomes "we cannot tell you yet", which the confidence label carries. | My judgement |
+| WID-04 | Widened bands floor at zero | Yes | Money and rates stop at nothing; a negative low end is arithmetic escaping into nonsense. | Arithmetic |
+| WID-05 | Minimum scale the widening works from | 0.15 of monthly income | Proportional widening breaks down when the centre is at or near zero: a safe carry that has floored at nothing would come out as a band of zero width, and *"you can afford nothing"* would be reported as the most certain answer in the system. It is the least certain — it is the answer most sensitive to the assumptions underneath it. Found by running the compare test on a borrower whose safe carry floored. | My judgement |
+
+## CONF — Confidence
+
+Confidence is not a separate judgement about the borrower. It is a reading of
+how wide the band came out, so the label and the number cannot disagree — a
+"high confidence" answer spanning a factor of three is exactly what this rule
+exists to prevent.
+
+| ID | What | Value | Why | Source |
+|---|---|---|---|---|
+| CONF-01 | Relative width | `(high − low) / midpoint` | Dimensionless, so one set of thresholds works for a rupee amount and for a percentage rate. | Arithmetic |
+| CONF-02 | Confidence from relative width | ≤ 0.20 high · ≤ 0.55 medium · above that low | A quarter-wide band is a useful answer. Past about half, the borrower should be told plainly that we are guessing. | My judgement |
+| CONF-03 | Verdict confidence | The weakest of `maxAmount` and `emiCeiling` | The verdict has no band of its own, and it cannot be more certain than the arithmetic underneath it. | Design decision |
+| CONF-04 | Confidence is never set by hand | Enforced by having one function produce it | A module that wants to express doubt must widen a band, which the borrower can see, rather than quietly downgrading a label they cannot check. Before this rule, three modules each had their own rule of thumb wearing the same word. | Design constraint |
+
+## NAR — What would narrow this
+
+| ID | What | Value | Why | Source |
+|---|---|---|---|---|
+| NAR-01 | Suggestions per output | 4 | More than a handful stops being a prompt and becomes a form. | My judgement |
+| NAR-02 | Ranking weight for the WID-02 exemptions | credit score 0.5 on `fairRate`, 0.2 on `maxAmount` · lender type 0.3 on `fairRate` | They still belong in `wouldNarrow` — checking a score is usually the most useful thing a borrower can do — but their impact is not in the widening table, so it is stated here for ordering only. | My judgement |
+| NAR-03 | Answered fields never appear | Excluded | The list is what to do next, not a list of what mattered. | Design constraint |
+
+## ASR — Assertions
+
+Two failure modes are treated as bugs rather than as states the engine may be
+in. Both are silent, and both are the exact thing this product exists not to
+do. **Both are negative-tested** — breaking each one on purpose produces the
+throw.
+
+| ID | What | Value | Why | Source |
+|---|---|---|---|---|
+| ASR-01 | No unanswered field may be coerced to zero unless DEF-* permits it | Throws | Zero is the most dangerous default in lending arithmetic: zero expenses, zero existing EMIs and zero informal debt all make a borrower look richer than they are, and none of them is visible in the output. | Design constraint |
+| ASR-02 | Where zero *is* permitted, and why it does not flatter | savings · rent when the borrower owns · bounces when a bureau score exists · informal debt, card balance and other loans (assuming one exists would be inventing it — the uncertainty is carried by WID-01 instead) · incremental earning · co-applicant income · down payment | Each entry has to state the reason it works against the borrower's case or is a fact rather than a guess. | Design constraint |
+| ASR-03 | Every applied default must reach the borrower as a Reason | Throws | Checked against the finished output rather than against intent: if a default fired and no Reason naming it survives into what the interface shows, it was computed with and then dropped. A silent assumption is the kind that only surfaces when somebody asks where a number came from. | Design constraint |
 
 ---
 

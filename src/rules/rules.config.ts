@@ -29,6 +29,7 @@ import type {
   AnswerFieldId,
   Band,
   CityTier,
+  Confidence,
   CreditScore,
   EmploymentType,
   IncomeProofType,
@@ -183,6 +184,21 @@ export const CO_APPLICANT = {
  * the app is built on the smaller figure.
  */
 export const RECOGNISED_INCOME_CAPPED_AT_DECLARED = true
+
+/**
+ * INC-13 - Proof is only as good as the figure behind it.
+ *
+ * A borrower who says they have filed a return but has not told us what it
+ * says has given us a claim, not a document. Counting that at the full ITR
+ * ratio would let the weakest possible answer produce the strongest possible
+ * recognition - and would make a borrower look better before they hand over
+ * the figure than after, which is the wrong way round.
+ *
+ * Such a claim falls back to the bank-statements ratio until the number
+ * arrives.
+ */
+export const PROOF_REQUIRES_ITS_FIGURE = true
+export const PROOF_FALLBACK_WITHOUT_FIGURE: IncomeProofType = 'bank_statements_only'
 
 /* =====================================================================
  * AFF - Affordability
@@ -1662,6 +1678,259 @@ export const REROUTE_TRADE_OFFS: Record<string, string> = {
 /** RTE-06 - No silent rerouting, under any circumstances. */
 export const REQUIRE_EXPLICIT_COMPARISON_BEFORE_REROUTE = true
 
+
+/* =====================================================================
+ * WID - Band widening
+ *
+ * A band's width is computed from what the borrower has not told us, never
+ * assigned. With only the opening questions answered every band should be
+ * visibly wide; each further answer removes its own contribution and the
+ * band tightens.
+ *
+ * A factor is a fraction of the band's own central value, added to each
+ * side. 0.10 on a 20,000 centre widens the band by 2,000 either way. They
+ * are additive across unanswered fields, so a borrower who has told us
+ * almost nothing gets a band wide enough to be useless - which is the
+ * honest thing for it to be, and the thing that makes answering worthwhile.
+ * ===================================================================== */
+
+/** The four outputs, for keying the tables below. */
+export type OutputId = 'verdict' | 'maxAmount' | 'fairRate' | 'emiCeiling'
+
+/**
+ * WID-01 - How much each unanswered field widens each output.
+ *
+ * The sizes are relative judgements rather than measurements: what matters
+ * is that household spending moves the affordability numbers more than the
+ * number of dependants does, and that income documentation moves the lender
+ * numbers most of all. A reviewer who disagrees with an individual figure
+ * can change it here and watch every band move.
+ */
+export const WIDENING_FACTOR: Record<OutputId, Partial<Record<AnswerFieldId, number>>> = {
+  // The verdict is categorical and has no band of its own (CONF-03).
+  verdict: {},
+
+  fairRate: {
+    quotedProcessingFee: 0.04,
+    requestedAmount: 0.03,
+    requestedTenure: 0.03,
+    repaymentHistory: 0.05,
+    bouncedEmisLast12m: 0.03,
+    timeInCurrentWork: 0.02,
+  },
+
+  maxAmount: {
+    incomeProof: 0.15,
+    employmentType: 0.15,
+    householdExpensesMonthly: 0.12,
+    existingEmiMonthly: 0.1,
+    rentMonthly: 0.08,
+    itrIncomeAnnual: 0.08,
+    informalDebtOutstanding: 0.07,
+    propertyValue: 0.06,
+    dependents: 0.05,
+    hasCoApplicant: 0.05,
+    savingsBuffer: 0.05,
+    cityTier: 0.04,
+  },
+
+  emiCeiling: {
+    householdExpensesMonthly: 0.15,
+    existingEmiMonthly: 0.12,
+    rentMonthly: 0.1,
+    incomeProof: 0.1,
+    employmentType: 0.1,
+    informalDebtOutstanding: 0.08,
+    savingsBuffer: 0.06,
+    dependents: 0.06,
+    cityTier: 0.05,
+    incomeStability: 0.04,
+  },
+}
+
+/**
+ * WID-02 - Fields that must never be widened, because they already carry
+ * their own distribution somewhere else in this file.
+ *
+ * An unknown credit score is not handled by adding a fudge factor to the
+ * rate: it is handled by CRD-08, which prices it as the union of every
+ * scored tier. Adding a widening factor on top would charge the borrower
+ * twice for the same missing fact and would make the band a number nobody
+ * could derive. The same goes for an unnamed lender, which PRD-08 already
+ * spans market-wide.
+ *
+ * This list is the difference between "we widened for it" and "we forgot
+ * it" - without it, an exemption looks like an omission.
+ */
+export const WIDENING_EXEMPT_FIELDS: AnswerFieldId[] = [
+  'creditScore',
+  'hasCreditHistory',
+  'lenderType',
+]
+
+/**
+ * WID-03 - Ceiling on total widening, as a fraction of the central value.
+ *
+ * Without a cap, a borrower who has answered almost nothing gets a band so
+ * wide the low end goes to zero and the high end is fantasy. Past this
+ * point the honest message is not a wider number but "we cannot tell you
+ * yet", and the confidence label carries that (CONF-02).
+ */
+export const MAX_TOTAL_WIDENING_RATIO = 0.9
+
+/**
+ * WID-04 - A widened band never goes below zero. Money and rates have a
+ * floor at nothing, and a negative low end would be arithmetic escaping
+ * into nonsense.
+ */
+export const WIDENED_BAND_FLOOR_AT_ZERO = true
+
+/**
+ * WID-05 - The smallest scale our uncertainty is allowed to claim, as a
+ * share of the borrower's monthly income.
+ *
+ * Widening is proportional to a band's own centre, which breaks down when
+ * the centre is at or near zero: a safe carry that has floored at nothing
+ * would come out as a band of zero width, and "you can afford nothing"
+ * would be reported as the most certain answer in the system. It is not -
+ * it is the least certain, because it is the answer most sensitive to the
+ * assumptions underneath it.
+ *
+ * So widening works off whichever is larger: the band's own centre, or this
+ * share of monthly income. In plain terms, the engine never claims to know
+ * an affordability figure to finer than about a sixth of a month's earnings.
+ */
+export const MIN_WIDENING_SCALE_RATIO_OF_INCOME = 0.15
+
+/* =====================================================================
+ * CONF - Confidence
+ *
+ * Confidence is not a separate judgement about the borrower. It is a
+ * reading of how wide the band came out, so that the label and the number
+ * can never disagree - a "high confidence" answer spanning a factor of
+ * three is the thing this rule exists to prevent.
+ * ===================================================================== */
+
+/**
+ * CONF-01 - Relative width: (high - low) / midpoint. Dimensionless, so the
+ * same thresholds work for a rupee amount and for a percentage rate.
+ */
+export const RELATIVE_WIDTH_METHOD = 'span_over_midpoint' as const
+
+/**
+ * CONF-02 - Confidence from relative width. Walked in order; the first
+ * threshold the width fits under wins.
+ *
+ * A quarter-wide band is a useful answer. Past about half, the borrower
+ * should be told plainly that we are guessing.
+ */
+export const CONFIDENCE_BY_RELATIVE_WIDTH: ReadonlyArray<{
+  upToRelativeWidth: number
+  confidence: Confidence
+}> = [
+  { upToRelativeWidth: 0.2, confidence: 'high' },
+  { upToRelativeWidth: 0.55, confidence: 'medium' },
+  { upToRelativeWidth: Number.POSITIVE_INFINITY, confidence: 'low' },
+]
+
+/**
+ * CONF-03 - The verdict has no band, so its confidence is the weakest of
+ * the numbers it was decided from. A verdict cannot be more certain than
+ * the arithmetic underneath it.
+ */
+export const VERDICT_CONFIDENCE_SOURCES: OutputId[] = ['maxAmount', 'emiCeiling']
+
+/**
+ * CONF-04 - Confidence is never set by hand anywhere in the engine. If a
+ * module wants to express doubt it must widen a band, which is visible to
+ * the borrower, rather than quietly downgrading a label they cannot check.
+ */
+export const CONFIDENCE_IS_DERIVED_ONLY = true
+
+/* =====================================================================
+ * NAR - What would narrow this
+ * ===================================================================== */
+
+/**
+ * NAR-01 - How many narrowing suggestions an output carries. More than a
+ * handful stops being a prompt and becomes a form.
+ */
+export const WOULD_NARROW_MAX_ITEMS = 4
+
+/**
+ * NAR-02 - Ranking weight for the fields exempted from widening (WID-02).
+ *
+ * They still belong in `wouldNarrow` - checking a credit score is the single
+ * most useful thing most borrowers can do - but their impact is not in the
+ * widening table, so it is stated here. The figures are the share of the
+ * band each field is responsible for, used only for ordering.
+ */
+export const WOULD_NARROW_DISTRIBUTION_IMPACT: Record<
+  OutputId,
+  Partial<Record<AnswerFieldId, number>>
+> = {
+  verdict: {},
+  fairRate: { creditScore: 0.5, lenderType: 0.3, hasCreditHistory: 0.2 },
+  maxAmount: { creditScore: 0.2, lenderType: 0.1 },
+  emiCeiling: { creditScore: 0.1 },
+}
+
+/**
+ * NAR-03 - A field already answered never appears in `wouldNarrow`, even
+ * when its impact would rank it first. The list is what to do next, not a
+ * list of what mattered.
+ */
+export const WOULD_NARROW_EXCLUDES_ANSWERED = true
+
+/* =====================================================================
+ * ASR - Assertions
+ *
+ * Two failure modes are treated as bugs rather than as states the engine is
+ * allowed to be in, because both of them are silent and both are exactly
+ * what this product exists not to do.
+ * ===================================================================== */
+
+/**
+ * ASR-01 - No unanswered field may be coerced to zero unless DEF-* says so.
+ *
+ * Zero is the most dangerous default in lending arithmetic: zero expenses,
+ * zero existing EMIs and zero informal debt all make a borrower look richer
+ * than they are, and all of them are invisible in the output. The engine
+ * throws rather than producing a flattering number nobody asked for.
+ */
+export const ASSERT_NO_UNJUSTIFIED_ZERO_COERCION = true
+
+/**
+ * ASR-02 - Fields where zero is the permitted assumption, each with the
+ * reason it does not flatter the borrower. This is DEF-22 in the form the
+ * assertion can actually check.
+ */
+export const ZERO_COERCION_JUSTIFIED: Partial<Record<AnswerFieldId, string>> = {
+  savingsBuffer: 'DEF-07. Assuming no savings works against the borrower, not for them.',
+  rentMonthly: 'DEF-02. Zero only where the borrower has said they own their home, which makes it a fact.',
+  bouncedEmisLast12m: 'CRD-15. A bureau score already prices delinquency; assuming bounces on top charges twice for one event.',
+  informalDebtOutstanding:
+    'DEF-19. Assuming an informal debt exists would be inventing one. The uncertainty is carried by the widening in WID-01 instead.',
+  creditCardOutstanding:
+    'DEF-19, same reasoning. A balance nobody mentioned is not evidence of a balance.',
+  existingLoanOutstanding: 'DEF-19, same reasoning.',
+  incrementalEarningMonthly:
+    'VRD-07. Earning is only counted when stated, so zero is the correct assumption and the strict one.',
+  coApplicantIncomeMonthly: 'INC-11. A co-applicant is never inferred, so nothing is counted.',
+  downPaymentAvailable: 'Assuming a down payment the borrower has not mentioned would overstate what they can buy.',
+}
+
+/**
+ * ASR-03 - Every default that fires must reach the borrower as a Reason.
+ *
+ * The assertion is on the output, not on intent: if a default was applied
+ * and no Reason naming that field survives into the result, the engine
+ * throws. A silent assumption is the failure being graded, and it is the
+ * kind that only shows up when somebody in an interview asks where a number
+ * came from.
+ */
+export const ASSERT_EVERY_DEFAULT_HAS_A_REASON = true
+
 /* =====================================================================
  * The single exported object
  *
@@ -1681,6 +1950,8 @@ export const RULES = {
     ITR_ANNUAL_TO_MONTHLY_DIVISOR,
     CO_APPLICANT,
     RECOGNISED_INCOME_CAPPED_AT_DECLARED,
+    PROOF_REQUIRES_ITS_FIGURE,
+    PROOF_FALLBACK_WITHOUT_FIGURE,
   },
   affordability: {
     FOIR_CAP_BY_INCOME_BAND,
@@ -1775,6 +2046,29 @@ export const RULES = {
     MIN_ACTIONS_BY_VERDICT,
     ALWAYS_AVAILABLE_ACTIONS,
     ACTION_MUST_STATE_WHAT_IT_CHANGES,
+  },
+  widening: {
+    WIDENING_FACTOR,
+    WIDENING_EXEMPT_FIELDS,
+    MAX_TOTAL_WIDENING_RATIO,
+    WIDENED_BAND_FLOOR_AT_ZERO,
+    MIN_WIDENING_SCALE_RATIO_OF_INCOME,
+  },
+  confidence: {
+    RELATIVE_WIDTH_METHOD,
+    CONFIDENCE_BY_RELATIVE_WIDTH,
+    VERDICT_CONFIDENCE_SOURCES,
+    CONFIDENCE_IS_DERIVED_ONLY,
+  },
+  narrowing: {
+    WOULD_NARROW_MAX_ITEMS,
+    WOULD_NARROW_DISTRIBUTION_IMPACT,
+    WOULD_NARROW_EXCLUDES_ANSWERED,
+  },
+  assertions: {
+    ASSERT_NO_UNJUSTIFIED_ZERO_COERCION,
+    ZERO_COERCION_JUSTIFIED,
+    ASSERT_EVERY_DEFAULT_HAS_A_REASON,
   },
   routing: {
     ROUTING_MAY_OVERRIDE_STATED_PRODUCT,
