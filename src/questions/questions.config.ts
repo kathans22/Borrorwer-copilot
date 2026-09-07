@@ -13,8 +13,13 @@
  *     answers ten questions and stops gets a complete assessment, wide bands
  *     and all, rather than a spinner.
  *   - Every additional question declares what it tightens, and the claim is
- *     tested. A question that moves no band is a question that wastes
- *     somebody's afternoon, and it is deleted rather than kept.
+ *     tested (`npm run personas -- --tightens`). A question that moves no
+ *     band is a question that wastes somebody's afternoon, and it is deleted
+ *     rather than kept for completeness.
+ *
+ * `appliesWhen` is what stops the graph being a form. A salaried borrower is
+ * never asked about GST returns or business vintage; somebody with no
+ * property is never asked what it is worth.
  */
 
 import type { OutputId } from '../rules/rules.config'
@@ -295,7 +300,405 @@ export const MUST_QUESTIONS: Question[] = [
  * by the --tightens run.
  * ------------------------------------------------------------------ */
 
-export const ADDITIONAL_QUESTIONS: Question[] = []
+export const ADDITIONAL_QUESTIONS: Question[] = [
+  {
+    id: 'incomeProof',
+    tier: 'additional',
+    prompt: 'What can you show a lender to prove your income?',
+    inputType: 'select',
+    allowUnknown: false,
+    appliesWhen: applies.always,
+    tightens: ['maxAmount', 'emiCeiling', 'fairRate'],
+    whyWeAsk:
+      'The single biggest lever on what you will be offered. The same income with paperwork and without it produces very different numbers.',
+    options: [
+      { value: 'salary_slips', label: 'Payslips' },
+      { value: 'itr', label: 'Income tax return' },
+      { value: 'gst_returns', label: 'GST returns' },
+      { value: 'bank_statements_only', label: 'Bank statements only' },
+      { value: 'none', label: 'Nothing I can produce' },
+    ],
+  },
+  {
+    id: 'guaranteedIncomeMonthly',
+    tier: 'additional',
+    prompt: 'Of that, how much comes in even in a bad month?',
+    inputType: 'currency',
+    allowUnknown: false,
+    appliesWhen: applies.always,
+    tightens: ['emiCeiling', 'maxAmount'],
+    whyWeAsk:
+      'Otherwise we have to guess where the bottom of your range is. You know, and your answer replaces our guess.',
+    hint: '₹ per month',
+  },
+  {
+    id: 'itrIncomeAnnual',
+    tier: 'additional',
+    prompt: 'What income does your last filed return show?',
+    inputType: 'currency',
+    allowUnknown: true,
+    appliesWhen: applies.always,
+    tightens: ['maxAmount', 'emiCeiling'],
+    whyWeAsk:
+      'A lender cannot count more than you have declared, so this often sets the ceiling — even where the business takes more.',
+    hint: '₹ per year',
+  },
+  {
+    id: 'timeInCurrentWork',
+    tier: 'additional',
+    prompt: 'How long have you been earning this way?',
+    inputType: 'number',
+    allowUnknown: false,
+    appliesWhen: applies.always,
+    tightens: ['fairRate', 'maxAmount'],
+    whyWeAsk:
+      'Where there is no credit score, how long the income has held up is the main thing a lender has to go on instead.',
+    hint: 'months',
+  },
+  {
+    id: 'incomeStability',
+    tier: 'additional',
+    prompt: 'How steady is your income month to month?',
+    inputType: 'select',
+    allowUnknown: false,
+    appliesWhen: applies.always,
+    tightens: ['emiCeiling', 'maxAmount'],
+    whyWeAsk: 'This sets how hard we stress-test the instalment against a bad stretch.',
+    options: [
+      { value: 'stable', label: 'About the same every month' },
+      { value: 'seasonal', label: 'Busy and quiet seasons' },
+      { value: 'volatile', label: 'Varies a lot, hard to predict' },
+    ],
+  },
+  {
+    id: 'hasCoApplicant',
+    tier: 'additional',
+    prompt: 'Is there someone in the household who also earns and could apply with you?',
+    inputType: 'boolean',
+    allowUnknown: false,
+    appliesWhen: applies.always,
+    tightens: ['maxAmount', 'emiCeiling'],
+    whyWeAsk:
+      'Adding an earning co-applicant usually raises what a lender will offer more than anything else you can do quickly.',
+  },
+  {
+    id: 'coApplicantIncomeMonthly',
+    tier: 'additional',
+    prompt: 'What do they earn each month?',
+    inputType: 'currency',
+    allowUnknown: false,
+    appliesWhen: applies.always,
+    tightens: ['maxAmount', 'emiCeiling'],
+    whyWeAsk:
+      'It counts towards what your household can carry either way. Whether it counts towards what a lender will lend depends on the next question.',
+    hint: '₹ per month',
+  },
+  {
+    id: 'coApplicantIncomeProof',
+    tier: 'additional',
+    prompt: 'Can they prove that income on paper?',
+    inputType: 'select',
+    allowUnknown: false,
+    appliesWhen: applies.always,
+    tightens: ['maxAmount'],
+    whyWeAsk:
+      'Undocumented income still feeds your household. It does not feed the lender calculation, and the gap is worth seeing.',
+    options: [
+      { value: 'salary_slips', label: 'Payslips' },
+      { value: 'itr', label: 'Income tax return' },
+      { value: 'bank_statements_only', label: 'Bank statements only' },
+      { value: 'none', label: 'Nothing on paper' },
+    ],
+  },
+  {
+    id: 'existingLoanOutstanding',
+    tier: 'additional',
+    prompt: 'How much is still outstanding on that borrowing?',
+    inputType: 'currency',
+    allowUnknown: true,
+    appliesWhen: applies.always,
+    tightens: ['maxAmount', 'emiCeiling'],
+    whyWeAsk:
+      'The monthly figure alone does not tell us whether it ends next year or in ten. The balance does.',
+    hint: '₹',
+  },
+  {
+    id: 'existingLoanRate',
+    tier: 'additional',
+    prompt: 'What rate are you paying on it?',
+    inputType: 'number',
+    allowUnknown: true,
+    appliesWhen: applies.always,
+    tightens: ['fairRate'],
+    whyWeAsk:
+      'Without the rate we cannot tell you whether replacing it would save you money — which is sometimes worth more than the new loan.',
+    hint: '% per year',
+  },
+  {
+    id: 'informalDebtOutstanding',
+    tier: 'additional',
+    prompt: 'Do you owe money outside the banking system — a local lender, a chit, family?',
+    inputType: 'currency',
+    allowUnknown: false,
+    appliesWhen: applies.always,
+    tightens: ['emiCeiling', 'maxAmount'],
+    whyWeAsk:
+      'This is usually the most expensive money in the household and the first thing worth dealing with. Nothing here is reported anywhere.',
+    hint: '₹, 0 if none',
+  },
+  {
+    id: 'informalDebtRateMonthly',
+    tier: 'additional',
+    prompt: 'What do you pay on it each month, as a percentage?',
+    inputType: 'number',
+    allowUnknown: true,
+    appliesWhen: applies.always,
+    tightens: ['emiCeiling', 'maxAmount'],
+    whyWeAsk:
+      'Rates like this are quoted monthly and compound into something much larger than they sound. We convert it properly.',
+    hint: '% per month',
+  },
+  {
+    id: 'hasCreditCards',
+    tier: 'additional',
+    prompt: 'Do you use credit cards?',
+    inputType: 'boolean',
+    allowUnknown: false,
+    appliesWhen: applies.always,
+    tightens: ['emiCeiling', 'maxAmount'],
+    whyWeAsk:
+      'A "no" here is genuinely useful — it removes an assumption we would otherwise have to carry.',
+  },
+  {
+    id: 'creditCardOutstanding',
+    tier: 'additional',
+    prompt: 'How much is outstanding across your cards?',
+    inputType: 'currency',
+    allowUnknown: true,
+    // Reachable by everyone, but a borrower who answered "no cards" never
+    // sees it: DEF-23 has already filled it in for them. Gating it on the
+    // predicate instead would make the gate question itself pointless,
+    // because a "no" would remove the follow-up rather than answer it.
+    appliesWhen: applies.always,
+    tightens: ['emiCeiling', 'maxAmount'],
+    whyWeAsk:
+      'A revolving balance costs about the same as a moneylender and is just as worth clearing first.',
+    hint: '₹',
+  },
+  {
+    id: 'upcomingExpenses12m',
+    tier: 'additional',
+    prompt: 'Is there anything big you already know is coming in the next year?',
+    inputType: 'currency',
+    allowUnknown: false,
+    appliesWhen: applies.always,
+    tightens: ['emiCeiling', 'maxAmount'],
+    whyWeAsk:
+      'A school fee, a wedding, a repair. Instalments tend to break in the month that was always going to be difficult.',
+    hint: '₹ total, 0 if none',
+  },
+  {
+    id: 'savingsBuffer',
+    tier: 'additional',
+    prompt: 'How much do you have set aside for emergencies?',
+    inputType: 'currency',
+    allowUnknown: false,
+    appliesWhen: applies.always,
+    tightens: ['emiCeiling', 'maxAmount'],
+    whyWeAsk:
+      'One month of cover is the difference between a bad month being awkward and it becoming a missed payment.',
+    hint: '₹',
+  },
+  {
+    id: 'dependents',
+    tier: 'additional',
+    prompt: 'How many people depend on your income?',
+    inputType: 'number',
+    allowUnknown: false,
+    appliesWhen: applies.always,
+    tightens: ['emiCeiling', 'maxAmount'],
+    whyWeAsk: 'It sets how much has to be left over each month before an instalment is safe.',
+    hint: 'people, not counting yourself',
+  },
+  {
+    id: 'rentMonthly',
+    tier: 'additional',
+    prompt: 'What rent do you pay?',
+    inputType: 'currency',
+    allowUnknown: false,
+    appliesWhen: applies.always,
+    tightens: ['emiCeiling', 'maxAmount'],
+    whyWeAsk: 'Rent comes out before anything else, so we keep it separate from other spending.',
+    hint: '₹ per month, 0 if you own',
+  },
+  {
+    id: 'cityTier',
+    tier: 'additional',
+    prompt: 'Where do you live?',
+    inputType: 'select',
+    allowUnknown: false,
+    appliesWhen: applies.always,
+    tightens: ['emiCeiling', 'maxAmount'],
+    whyWeAsk: 'Cost of living differs enough to change what is left over after an instalment.',
+    options: [
+      { value: 'metro', label: 'A metro' },
+      { value: 'tier2', label: 'A large town or small city' },
+      { value: 'tier3', label: 'A smaller town' },
+      { value: 'rural', label: 'A village or rural area' },
+    ],
+  },
+  {
+    id: 'lenderType',
+    tier: 'additional',
+    prompt: 'Has anyone already quoted you a loan?',
+    inputType: 'select',
+    allowUnknown: false,
+    appliesWhen: applies.always,
+    tightens: ['fairRate'],
+    whyWeAsk:
+      'Who is offering matters as much as your own file. The same borrower is priced very differently by a public sector bank and by an app.',
+    options: [
+      { value: 'psu_bank', label: 'A public sector bank' },
+      { value: 'private_bank', label: 'A private bank' },
+      { value: 'nbfc', label: 'An NBFC or finance company' },
+      { value: 'fintech', label: 'An app or online lender' },
+    ],
+  },
+  {
+    id: 'quotedRate',
+    tier: 'additional',
+    prompt: 'What rate did they quote?',
+    inputType: 'number',
+    allowUnknown: true,
+    appliesWhen: applies.always,
+    tightens: ['fairRate'],
+    whyWeAsk: 'So we can tell you whether it is a fair price for someone in your position.',
+    hint: '% per year',
+  },
+  {
+    id: 'quotedProcessingFee',
+    tier: 'additional',
+    prompt: 'What processing fee did they mention?',
+    inputType: 'number',
+    allowUnknown: true,
+    appliesWhen: applies.always,
+    tightens: ['fairRate'],
+    whyWeAsk:
+      '"I do not know" is fine and common — we will assume the top of the usual range and say so.',
+    hint: '% of the loan',
+  },
+  {
+    id: 'incrementalEarningMonthly',
+    tier: 'additional',
+    prompt: 'How much extra do you expect this to earn you each month?',
+    inputType: 'currency',
+    allowUnknown: false,
+    appliesWhen: applies.always,
+    tightens: ['verdict'],
+    whyWeAsk:
+      'We will not assume a loan earns anything just because you told us it is for business. If it earns, tell us how much.',
+    hint: '₹ per month',
+  },
+  {
+    id: 'incrementalEarningAlreadyHappening',
+    tier: 'additional',
+    prompt: 'Is that money already coming in, or is it what you expect?',
+    inputType: 'boolean',
+    allowUnknown: false,
+    appliesWhen: applies.always,
+    tightens: ['verdict'],
+    whyWeAsk:
+      'Earning you can already see counts for twice as much as earning you are forecasting. Neither counts in the bad case.',
+  },
+  {
+    id: 'repaymentHistory',
+    tier: 'additional',
+    prompt: 'How have your repayments gone?',
+    inputType: 'select',
+    allowUnknown: false,
+    appliesWhen: applies.always,
+    tightens: ['fairRate', 'verdict'],
+    whyWeAsk:
+      'Recent conduct is more current than a score, and it is the part you can fix on a known timetable.',
+    options: [
+      { value: 'clean', label: 'All on time' },
+      { value: 'none', label: 'I have not borrowed before' },
+      { value: 'settled', label: 'I settled or wrote off a loan once' },
+      { value: 'current_overdue', label: 'Something is overdue right now' },
+    ],
+  },
+  {
+    id: 'bouncedEmisLast12m',
+    tier: 'additional',
+    prompt: 'Any bounced payments in the last year?',
+    inputType: 'number',
+    allowUnknown: false,
+    appliesWhen: applies.always,
+    tightens: ['fairRate'],
+    whyWeAsk:
+      'It adds to your rate now and comes off after a set number of clean months, so it is worth knowing the date.',
+    hint: 'how many',
+  },
+  {
+    id: 'propertyValue',
+    tier: 'additional',
+    prompt: 'Do you own property? Roughly what is it worth?',
+    inputType: 'currency',
+    allowUnknown: true,
+    appliesWhen: applies.always,
+    tightens: ['maxAmount', 'fairRate'],
+    whyWeAsk:
+      'Property usually opens a much cheaper and much larger loan than an unsecured one — with a real trade-off we will spell out.',
+    hint: '₹',
+  },
+  {
+    id: 'propertyKind',
+    tier: 'additional',
+    prompt: 'Is it where you live, or business premises?',
+    inputType: 'select',
+    allowUnknown: false,
+    appliesWhen: applies.always,
+    tightens: ['maxAmount'],
+    whyWeAsk: 'Lenders advance less against commercial property than against a home.',
+    options: [
+      { value: 'residential', label: 'Where I live' },
+      { value: 'commercial', label: 'A shop or business premises' },
+    ],
+  },
+  {
+    id: 'propertyTitleClear',
+    tier: 'additional',
+    prompt: 'Is the title clear, with no existing loan against it?',
+    inputType: 'boolean',
+    allowUnknown: true,
+    appliesWhen: applies.always,
+    tightens: ['maxAmount', 'fairRate'],
+    whyWeAsk:
+      'Until this is confirmed we hold the cheaper secured option back, because a lender would.',
+  },
+  {
+    id: 'vehicleOnRoadPrice',
+    tier: 'additional',
+    prompt: 'What is the on-road price of the vehicle?',
+    inputType: 'currency',
+    allowUnknown: false,
+    appliesWhen: applies.always,
+    tightens: ['maxAmount'],
+    whyWeAsk: 'The loan is capped at a share of this, whatever your income says.',
+    hint: '₹',
+  },
+  {
+    id: 'downPaymentAvailable',
+    tier: 'additional',
+    prompt: 'How much can you put down yourself?',
+    inputType: 'currency',
+    allowUnknown: false,
+    appliesWhen: applies.always,
+    tightens: ['maxAmount'],
+    whyWeAsk: 'A larger deposit means a smaller loan and usually a better rate.',
+    hint: '₹',
+  },
+]
 
 export const ALL_QUESTIONS: Question[] = [...MUST_QUESTIONS, ...ADDITIONAL_QUESTIONS]
 
