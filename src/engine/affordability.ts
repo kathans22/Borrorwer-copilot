@@ -305,6 +305,8 @@ export function buildMaxAmount(input: {
   tenureMonths: number
   /** What the routed product can actually deliver, whatever the income says. */
   productCeiling: number
+  /** The cautious end of what security supports, where the product is secured. */
+  productFloor: number | null
   /** WID-05 - monthly income, from which the amount-scale floor is derived. */
   safetyIncomeMonthly: number
 }): MaxAmount {
@@ -312,10 +314,18 @@ export function buildMaxAmount(input: {
 
   // Neither figure may exceed what the product itself will advance - an LTV
   // cap or a ticket ceiling binds regardless of what the household can carry.
-  const cap = (b: Band<Rupees>): Band<Rupees> => ({
-    low: Math.min(b.low as number, productCeiling) as Rupees,
-    high: Math.min(b.high as number, productCeiling) as Rupees,
-  })
+  // Both ends of the LTV band are used: a lender may advance the cautious
+  // share or the generous one against the same asset, and which this borrower
+  // gets is not knowable here.
+  // The cautious LTV can sit above the income-derived ceiling, in which case
+  // it is not what binds and must not drag the bottom of the band above its
+  // own top. Clamped to the ceiling, and the band is ordered on the way out.
+  const floor = Math.min(input.productFloor ?? productCeiling, productCeiling)
+  const cap = (b: Band<Rupees>): Band<Rupees> => {
+    const low = Math.min(b.low as number, floor)
+    const high = Math.min(b.high as number, productCeiling)
+    return { low: Math.min(low, high) as Rupees, high: Math.max(low, high) as Rupees }
+  }
   const lenderBand = amountBand(aff.lenderEmiCeiling, rateBand, tenureMonths)
   const safeBand = amountBand(aff.safeCarryEmi, rateBand, tenureMonths)
 

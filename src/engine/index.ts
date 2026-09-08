@@ -77,25 +77,42 @@ function midOf(band: { low: number; high: number }): number {
   return (band.low + band.high) / 2
 }
 
-/** What collateral alone will support, before income is considered. */
-function collateralCap(answers: BorrowerAnswers, product: SupportedProduct): number | null {
+/**
+ * What collateral alone will support, before income is considered.
+ *
+ * Returns a range, not a figure. Lenders advance somewhere between the two
+ * ends of the LTV band against the same asset, and which end this borrower
+ * gets is not knowable from here - so both ends are used. Reading only the
+ * top left the bottom of every LTV band as decoration: a reviewer could
+ * change it and watch nothing happen.
+ */
+function collateralCap(
+  answers: BorrowerAnswers,
+  product: SupportedProduct,
+): { low: number; high: number } | null {
   if (product === 'lap') {
     const value = readNumeric(answers, 'propertyValue', 'income')
     if (!value?.stated) return null
     const kind = readChoice<PropertyKind>(answers, 'propertyKind') ?? 'residential'
-    return value.underwriting * (LAP_LTV_BY_PROPERTY_KIND[kind].high as number)
+    const ltv = LAP_LTV_BY_PROPERTY_KIND[kind]
+    return {
+      low: value.underwriting * (ltv.low as number),
+      high: value.underwriting * (ltv.high as number),
+    }
   }
   if (product === 'two_wheeler_ev') {
     const price = readNumeric(answers, 'vehicleOnRoadPrice', 'income')
     if (!price?.stated) return null
     const ltv = PRODUCTS.two_wheeler_ev.ltvRatio
-    const byLtv = price.underwriting * (ltv ? (ltv.high as number) : 1)
     // PRD-04's precondition, applied rather than merely stated: a borrower
     // putting money down needs to borrow only the balance, and a lender will
     // not advance more than the vehicle costs.
     const deposit = readNumeric(answers, 'downPaymentAvailable', 'income')
-    const byDeposit = deposit?.stated ? price.underwriting - deposit.underwriting : byLtv
-    return Math.max(Math.min(byLtv, byDeposit), 0)
+    const byDeposit = deposit?.stated
+      ? price.underwriting - deposit.underwriting
+      : Number.POSITIVE_INFINITY
+    const at = (r: number) => Math.max(Math.min(price.underwriting * r, byDeposit), 0)
+    return { low: at(ltv ? (ltv.low as number) : 1), high: at(ltv ? (ltv.high as number) : 1) }
   }
   return null
 }
@@ -129,8 +146,8 @@ function buildOffer(
 
   let maxAmountInr = byIncome
   let limitedBy: ProductOffer['limitedBy'] = 'income'
-  if (byCollateral !== null && byCollateral < maxAmountInr) {
-    maxAmountInr = byCollateral
+  if (byCollateral !== null && byCollateral.high < maxAmountInr) {
+    maxAmountInr = byCollateral.high
     limitedBy = 'collateral'
   }
   if (ceiling < maxAmountInr) {
@@ -144,6 +161,8 @@ function buildOffer(
     offer: {
       product,
       maxAmountInr,
+      /** The conservative end of what security supports, where there is any. */
+      collateralFloorInr: byCollateral ? Math.min(byCollateral.low, ceiling) : null,
       limitedBy,
       rateBand: pricing.rateBand,
       aprBand: pricing.aprBand,
@@ -243,6 +262,7 @@ export function computeWithTrace(raw: BorrowerAnswers): ComputeOutput {
     rateBand: top ? top.offer.rateBand : { low: 0, high: 0 },
     tenureMonths: Math.max(tenureMonths, 1),
     productCeiling: top ? top.offer.maxAmountInr : 0,
+    productFloor: top ? top.offer.collateralFloorInr : null,
     safetyIncomeMonthly: income.reliableSafetyIncomeMonthly,
   })
 

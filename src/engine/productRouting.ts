@@ -39,6 +39,8 @@ export type ProductOffer = {
   product: SupportedProduct
   /** Largest amount this product can actually deliver to this borrower. */
   maxAmountInr: number
+  /** The cautious end of what security supports. Null when unsecured. */
+  collateralFloorInr: number | null
   /** What held that amount down. */
   limitedBy: 'income' | 'collateral' | 'ticket_floor' | 'ticket_ceiling'
   rateBand: Band<number>
