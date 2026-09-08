@@ -316,8 +316,8 @@ export function buildMaxAmount(input: {
     low: Math.min(b.low as number, productCeiling) as Rupees,
     high: Math.min(b.high as number, productCeiling) as Rupees,
   })
-  const lenderBand = cap(amountBand(aff.lenderEmiCeiling, rateBand, tenureMonths))
-  const safeBand = cap(amountBand(aff.safeCarryEmi, rateBand, tenureMonths))
+  const lenderBand = amountBand(aff.lenderEmiCeiling, rateBand, tenureMonths)
+  const safeBand = amountBand(aff.safeCarryEmi, rateBand, tenureMonths)
 
   // Both figures are widened by the same unanswered questions and read their
   // confidence off the result, so neither can be labelled more certain than
@@ -330,8 +330,27 @@ export function buildMaxAmount(input: {
     (rateBand.low + rateBand.high) / 2,
     tenureMonths,
   )
-  const lenderUncertainty = resolveUncertainty(answers, 'maxAmount', lenderBand, amountScale)
-  const safeUncertainty = resolveUncertainty(answers, 'maxAmount', safeBand, amountScale)
+  // AFF-17 - the cap goes on last. Capping before the widening lets the
+  // widening put the band back above what the product will actually advance,
+  // which is a promise the app cannot keep.
+  const lenderWide = resolveUncertainty(answers, 'maxAmount', lenderBand, amountScale)
+  const safeWide = resolveUncertainty(answers, 'maxAmount', safeBand, amountScale)
+  const lenderUncertainty = { ...lenderWide, band: cap(lenderWide.band) }
+  const safeUncertainty = { ...safeWide, band: cap(safeWide.band) }
+
+  // When the ceiling is what binds, say so. Two figures clipped to the same
+  // number look identical even when the monthly limits behind them differ by
+  // several times, and the borrower needs to know which fact they are looking
+  // at - what this product will lend, or what they can afford.
+  const ceilingBinds =
+    (lenderWide.band.high as number) > productCeiling ||
+    (safeWide.band.high as number) > productCeiling
+  const ceilingReason = ceilingBinds
+    ? reason(
+        `Both figures stop at ${rupees(productCeiling)}, which is as much as this product will lend you - against what you have put up as security, not against what you earn. Your income and your household would stretch further than that.`,
+        ['propertyValue', 'productType', 'vehicleOnRoadPrice'],
+      )
+    : null
 
   const lenderLikely: NumericOutput<Rupees> = {
     band: lenderUncertainty.band,
@@ -341,6 +360,7 @@ export function buildMaxAmount(input: {
         `${rupees(lenderUncertainty.band.low)} to ${rupees(lenderUncertainty.band.high)} is what a ${rupees(aff.lenderEmiCeiling)} monthly instalment buys over ${Math.round(tenureMonths)} months at ${percent(rateBand.low)} to ${percent(rateBand.high)}.`,
         ['employmentType', 'incomeProof', 'creditScore'],
       ),
+      ...(ceilingReason ? [ceilingReason] : []),
     ],
     wouldNarrow: lenderUncertainty.wouldNarrow,
   }
@@ -353,6 +373,7 @@ export function buildMaxAmount(input: {
         `${rupees(safeUncertainty.band.low)} to ${rupees(safeUncertainty.band.high)} is what your household can carry at ${rupees(aff.safeCarryEmi)} a month over the same term.`,
         ['householdExpensesMonthly', 'rentMonthly', 'dependents', 'savingsBuffer'],
       ),
+      ...(ceilingReason ? [ceilingReason] : []),
     ],
     wouldNarrow: safeUncertainty.wouldNarrow,
   }

@@ -85,13 +85,15 @@ Salaried in a metro with payslips, borrowing for a wedding. Her paperwork is in 
 
 | | Range | Confidence |
 |---|---|---|
-| What a lender would likely offer | ₹3,37,294 – ₹6,09,698 | low |
+| What a lender would likely offer | ₹3,28,650 – ₹5,05,529 | low |
 | What the household can carry | ₹68,392 – ₹1,69,832 | low |
 
-**Go by: borrowerSafe.** A lender may well offer you up to ₹6,09,698, but go by ₹1,69,832. What binds is that ₹13,750 a month has to be left for a household of 2 to live on after ₹8,000 of rent and ₹1,300 of existing payments.
+**Go by: borrowerSafe.** A lender may well offer you up to ₹5,05,529, but go by ₹1,69,832. What binds is that ₹13,750 a month has to be left for a household of 2 to live on after ₹8,000 of rent and ₹1,300 of existing payments.
 
-- ₹3,37,294 to ₹6,09,698 is what a ₹12,700 monthly instalment buys over 60 months at 11% to 24%.
+- ₹3,28,650 to ₹5,05,529 is what a ₹12,700 monthly instalment buys over 60 months at 11% to 24%.
+- Both figures stop at ₹5,05,529, which is as much as this product will lend you - against what you have put up as security, not against what you earn. Your income and your household would stretch further than that.
 - ₹68,392 to ₹1,69,832 is what your household can carry at ₹2,950 a month over the same term.
+- Both figures stop at ₹5,05,529, which is as much as this product will lend you - against what you have put up as security, not against what you earn. Your income and your household would stretch further than that.
 
 ### O3 — What should it cost?
 
@@ -266,13 +268,15 @@ Shopkeeper, 42, takings between ₹40,000 and ₹80,000 a month depending on the
 
 | | Range | Confidence |
 |---|---|---|
-| What a lender would likely offer | ₹4,75,341 – ₹6,60,338 | medium |
-| What the household can carry | ₹5,03,551 – ₹6,60,338 | medium |
+| What a lender would likely offer | ₹4,75,341 – ₹5,81,945 | medium |
+| What the household can carry | ₹5,81,945 | medium |
 
-**Go by: lenderLikely.** Go by ₹6,60,338. Your household could carry more than a lender will advance here, so what you will be offered is the binding constraint rather than what you can afford.
+**Go by: lenderLikely.** Go by ₹5,81,945. Your household could carry more than a lender will advance here, so what you will be offered is the binding constraint rather than what you can afford.
 
-- ₹4,75,341 to ₹6,60,338 is what a ₹7,750 monthly instalment buys over 180 months at 13% to 15%.
-- ₹5,03,551 to ₹6,60,338 is what your household can carry at ₹19,067 a month over the same term.
+- ₹4,75,341 to ₹5,81,945 is what a ₹7,750 monthly instalment buys over 180 months at 13% to 15%.
+- Both figures stop at ₹5,81,945, which is as much as this product will lend you - against what you have put up as security, not against what you earn. Your income and your household would stretch further than that.
+- ₹5,81,945 to ₹5,81,945 is what your household can carry at ₹19,067 a month over the same term.
+- Both figures stop at ₹5,81,945, which is as much as this product will lend you - against what you have put up as security, not against what you earn. Your income and your household would stretch further than that.
 
 ### O3 — What should it cost?
 
@@ -327,7 +331,7 @@ Stress case (a scenario, not a forecast): a 30% fall in income and a 2% rate ris
 1. **Get six months of bank statements for the account your earnings go into.**
    - Your household has ₹58,000 a month but a lender counts ₹35,000, and everything you are offered is built on the smaller figure. _(weeks)_
 2. **Ask for the smaller amount this assessment says you can carry, and stage the rest.**
-   - You asked for ₹15,00,000. ₹6,60,338 is what your household can carry without a bad month becoming a missed payment. _(today)_
+   - You asked for ₹15,00,000. ₹5,81,945 is what your household can carry without a bad month becoming a missed payment. _(today)_
 3. **Put aside one month of expenses before taking the loan.**
    - You have a month's cover already. Building it to about ₹1,45,000 more is what would let you carry this without a quiet season becoming a missed payment. _(months)_
 4. **Tell us what your household actually spends in a month.**
@@ -339,7 +343,7 @@ Stress case (a scenario, not a forecast): a 30% fall in income and a 2% rate ris
 |---|---|
 | A fair rate for me | 13% – 15% a year |
 | What I can pay each month | ₹6,445 – ₹9,055 |
-| What I am asking to borrow | ₹5,03,551 – ₹6,60,338 |
+| What I am asking to borrow | ₹5,81,945 |
 | The number I compare offers on | 15.2% – 17.6% all-in |
 
 **Why that is fair for me:**
@@ -362,7 +366,7 @@ Stress case (a scenario, not a forecast): a 30% fall in income and a 2% rate ris
 
 - True all-in cost of that offer: **24%**
 - Verdict: **above fair**
-- Against the best rate she should get (13%): **₹6,72,004 more over 15 years**, or ₹3,733 a month — ₹12,088 instead of ₹8,355
+- Against the best rate she should get (13%): **₹5,92,226 more over 15 years**, or ₹3,290 a month — ₹10,653 instead of ₹7,363
 
 ---
 
@@ -433,13 +437,15 @@ Delivery rider who also takes in tailoring, buying an electric scooter to earn w
 
 | | Range | Confidence |
 |---|---|---|
-| What a lender would likely offer | ₹85,800 – ₹1,34,200 | medium |
+| What a lender would likely offer | ₹86,870 – ₹1,10,000 | medium |
 | What the household can carry | ₹0 – ₹35,412 | low |
 
-**Go by: borrowerSafe.** A lender may well offer you up to ₹1,34,200, but go by ₹35,412. What binds is your monthly budget, and the largest single pressure on it is ₹10,000 of living costs.
+**Go by: borrowerSafe.** A lender may well offer you up to ₹1,10,000, but go by ₹35,412. What binds is your monthly budget, and the largest single pressure on it is ₹10,000 of living costs.
 
-- ₹85,800 to ₹1,34,200 is what a ₹3,550 monthly instalment buys over 48 months at 17.5% to 22%.
+- ₹86,870 to ₹1,10,000 is what a ₹3,550 monthly instalment buys over 48 months at 17.5% to 22%.
+- Both figures stop at ₹1,10,000, which is as much as this product will lend you - against what you have put up as security, not against what you earn. Your income and your household would stretch further than that.
 - ₹0 to ₹35,412 is what your household can carry at ₹333 a month over the same term.
+- Both figures stop at ₹1,10,000, which is as much as this product will lend you - against what you have put up as security, not against what you earn. Your income and your household would stretch further than that.
 
 ### O3 — What should it cost?
 

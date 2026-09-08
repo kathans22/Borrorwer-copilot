@@ -381,6 +381,23 @@ export const UPCOMING_EXPENSES_AFFECT_SAFETY_VIEW_ONLY = true
  * dependants, the existing obligations, the buffer - because "your safe
  * limit is lower" tells the borrower nothing they can act on.
  */
+/**
+ * AFF-17 - The product ceiling binds after the uncertainty widening, not
+ * before it, and when it binds the borrower is told so.
+ *
+ * Capping first and widening afterwards puts the band back above the ceiling,
+ * which means telling somebody they might get more than the product will
+ * actually advance. It also hides the thing this output exists to show: when
+ * both figures are clipped to the same ceiling they look identical, even for
+ * a borrower whose two monthly limits differ by two and a half times.
+ *
+ * So the cap is applied last, and where it is what binds, that is said out
+ * loud - because "this is as much as this product will lend against your
+ * shop" is a different fact from "this is as much as you can afford", and
+ * they lead to different next steps.
+ */
+export const PRODUCT_CEILING_BINDS_AFTER_WIDENING = true
+
 export const LEAD_WITH_LOWER_OF_THE_TWO_AMOUNTS = true
 export const USE_WHICH_REASON_MUST_NAME_BINDING_TERM = true
 
@@ -2253,6 +2270,7 @@ export const RULES = {
     AFFORDABILITY_RULES_ARE_INDEPENDENT,
     UPCOMING_EXPENSE_HORIZON_MONTHS,
     UPCOMING_EXPENSES_AFFECT_SAFETY_VIEW_ONLY,
+    PRODUCT_CEILING_BINDS_AFTER_WIDENING,
     LEAD_WITH_LOWER_OF_THE_TWO_AMOUNTS,
     USE_WHICH_REASON_MUST_NAME_BINDING_TERM,
   },
