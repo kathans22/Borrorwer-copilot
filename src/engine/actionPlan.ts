@@ -14,6 +14,7 @@
 
 import {
   ACTION_CATALOGUE,
+  RATE_WIDTH_ONCE_SCORE_IS_KNOWN_PCT_POINTS,
   ALWAYS_AVAILABLE_ACTIONS,
   MIN_ACTIONS_BY_VERDICT,
   type ConstraintId,
@@ -74,7 +75,7 @@ function changesWhat(id: ConstraintId, ctx: ActionContext): string {
   switch (id) {
     case 'credit_score_unknown':
       return ctx.rateBandWidthPctPoints !== undefined
-        ? `Your rate range is ${percent(ctx.rateBandWidthPctPoints)} wide right now because nothing has been measured. Knowing the score would narrow it to around ${percent(ctx.narrowedRateWidthPctPoints ?? 2.5)}.`
+        ? `Your rate range is ${percent(ctx.rateBandWidthPctPoints)} wide right now because nothing has been measured. Knowing the score would narrow it to around ${percent(ctx.narrowedRateWidthPctPoints ?? RATE_WIDTH_ONCE_SCORE_IS_KNOWN_PCT_POINTS)}.`
         : fallback
 
     case 'income_undocumented':

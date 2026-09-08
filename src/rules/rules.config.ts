@@ -1065,6 +1065,23 @@ export const CONSOLIDATION_CAPABLE_PRODUCTS: SupportedProduct[] = [
   'business_unsecured',
 ]
 
+/**
+ * REF-14 - How long a consolidation is written over, and what is assumed
+ * about an existing loan whose remaining term the borrower does not know.
+ *
+ * The tenure cap matters: stretching expensive debt over a long term makes
+ * the monthly figure look good and the total worse, which is the trap the
+ * borrower is already in. Three years is short enough that the comparison
+ * cannot flatter itself.
+ *
+ * The assumed remaining term is a real assumption about an unknown and it
+ * used to sit in the engine as a bare `?? 60`. Five years is the middle of a
+ * retail loan book; being wrong in either direction changes the switching
+ * comparison, which is why it is written down here rather than buried.
+ */
+export const REFINANCE_MAX_TENURE_MONTHS: Months = months(36)
+export const EXISTING_LOAN_ASSUMED_REMAINING_MONTHS: Months = months(60)
+
 export const REFINANCE_COMPARISON_METHOD = 'cumulative_cost_including_residual_principal' as const
 
 /* =====================================================================
@@ -1408,6 +1425,15 @@ export const FIELD_DEFAULTS = {
  * This is the opposite of a silent default: it is a stated fact being
  * carried to where it belongs.
  */
+/**
+ * DEF-25 - The amount above which collateral is worth asking about, for a
+ * borrower who has not named a secured product and does not run a business.
+ *
+ * Below this, unsecured lending reaches far enough that asking somebody what
+ * their home is worth is an intrusion that buys nothing.
+ */
+export const ASK_ABOUT_COLLATERAL_ABOVE_INR: Rupees = inr(500_000)
+
 export const GATE_ANSWERS_IMPLY_ZERO: Partial<Record<AnswerFieldId, AnswerFieldId>> = {
   hasCreditCards: 'creditCardOutstanding',
   hasCoApplicant: 'coApplicantIncomeMonthly',
@@ -2013,6 +2039,16 @@ export const WOULD_NARROW_EXCLUDES_ANSWERED = true
  * towards the second without discarding the first, so that the next question
  * is the one that would actually move *their* numbers.
  */
+/**
+ * NAR-05 - How narrow a rate range becomes once a credit score is known,
+ * used in the claim ACT-01 makes to the borrower.
+ *
+ * It is the width of a single scored tier's spread, which is what checking
+ * actually buys them. It was a bare 2.5 in the engine, which made a number
+ * the borrower reads impossible to change without editing code.
+ */
+export const RATE_WIDTH_ONCE_SCORE_IS_KNOWN_PCT_POINTS = 2.5
+
 export const ORDERING_BONUS_FOR_LIVE_NARROWING = 0.25
 
 /* =====================================================================
@@ -2318,6 +2354,8 @@ export const RULES = {
     CREDIT_CARD_ASSUMED_ANNUAL_RATE_PCT,
     INFORMAL_DEBT_ASSUMED_INTEREST_ONLY,
     REFINANCE_COMPARISON_METHOD,
+    REFINANCE_MAX_TENURE_MONTHS,
+    EXISTING_LOAN_ASSUMED_REMAINING_MONTHS,
     CONSOLIDATION_CAPABLE_PRODUCTS,
   },
   verdict: {
@@ -2341,6 +2379,7 @@ export const RULES = {
     ZERO_DEFAULT_ALLOWED_ONLY_FOR,
     ASSUMED_PROOF_BY_EMPLOYMENT,
     GATE_ANSWERS_IMPLY_ZERO,
+    ASK_ABOUT_COLLATERAL_ABOVE_INR,
   },
   apr: {
     APR_METHOD,
@@ -2381,6 +2420,7 @@ export const RULES = {
     WOULD_NARROW_DISTRIBUTION_IMPACT,
     WOULD_NARROW_EXCLUDES_ANSWERED,
     ORDERING_BONUS_FOR_LIVE_NARROWING,
+    RATE_WIDTH_ONCE_SCORE_IS_KNOWN_PCT_POINTS,
   },
   assertions: {
     ASSERT_NO_UNJUSTIFIED_ZERO_COERCION,

@@ -11,6 +11,8 @@
 
 import {
   CONSOLIDATION_CAPABLE_PRODUCTS,
+  RATE_WIDTH_ONCE_SCORE_IS_KNOWN_PCT_POINTS,
+  REFINANCE_MAX_TENURE_MONTHS,
   FIELD_DEFAULTS,
   LAP_LTV_BY_PROPERTY_KIND,
   MIN_WIDENING_SCALE_RATIO_OF_INCOME,
@@ -203,7 +205,10 @@ export function computeWithTrace(raw: BorrowerAnswers): ComputeOutput {
     ? {
         label: labelFor(refinanceBuild.offer.product),
         annualRatePct: midOf(refinanceBuild.offer.rateBand),
-        tenureMonths: Math.min(refinanceBuild.offer.tenureMonths, 36),
+        tenureMonths: Math.min(
+          refinanceBuild.offer.tenureMonths,
+          REFINANCE_MAX_TENURE_MONTHS as number,
+        ),
         processingFeePct: refinanceBuild.pricing.processingFeePct,
         otherChargesInr: refinanceBuild.pricing.otherCharges,
       }
@@ -319,7 +324,7 @@ export function computeWithTrace(raw: BorrowerAnswers): ComputeOutput {
   const informal = refinance.candidates.find((d) => d.label === 'informal borrowing')
   const context: ActionContext = {
     rateBandWidthPctPoints: top ? top.offer.rateBand.high - top.offer.rateBand.low : undefined,
-    narrowedRateWidthPctPoints: 2.5,
+    narrowedRateWidthPctPoints: RATE_WIDTH_ONCE_SCORE_IS_KNOWN_PCT_POINTS,
     recognisedIncomeMonthly: income.recognisedLenderIncomeMonthly,
     reliableIncomeMonthly: income.reliableSafetyIncomeMonthly,
     safeAmountInr: maxAmount.borrowerSafe.band.high as number,

@@ -16,6 +16,7 @@
 
 import {
   CREDIT_CARD_ASSUMED_ANNUAL_RATE_PCT,
+  EXISTING_LOAN_ASSUMED_REMAINING_MONTHS,
   FORECLOSURE_FEE_DEFAULT_PCT,
   GST_ON_FEES_PCT,
   HIGH_COST_DEBT_THRESHOLD_ANNUAL_PCT,
@@ -47,6 +48,8 @@ export type ExistingDebt = {
   /** False for revolving and informal debt: the balance does not come down. */
   amortising: boolean
   remainingMonths: number | null
+  /** True where REF-14's assumed term was used because none was stated. */
+  assumedRemainingTerm?: boolean
   drivenBy: AnswerFieldId[]
 }
 
@@ -113,9 +116,16 @@ export function collectDebts(answers: BorrowerAnswers): ExistingDebt[] {
       annualRatePct: loanRate.underwriting,
       monthlyService: loanEmi?.stated
         ? loanEmi.underwriting
-        : emiFor(loan.underwriting, loanRate.underwriting, loanLeft?.underwriting ?? 60),
+        : emiFor(
+            loan.underwriting,
+            loanRate.underwriting,
+            loanLeft?.stated
+              ? loanLeft.underwriting
+              : (EXISTING_LOAN_ASSUMED_REMAINING_MONTHS as number),
+          ),
       amortising: true,
       remainingMonths: loanLeft?.stated ? loanLeft.underwriting : null,
+      assumedRemainingTerm: !loanLeft?.stated,
       drivenBy: ['existingLoanOutstanding', 'existingLoanRate', 'existingLoanEmi'],
     })
   }
@@ -135,7 +145,12 @@ function costOfStaying(debts: ExistingDebt[], m: number): number {
   return debts.reduce((sum, d) => {
     const paid = d.monthlyService * m
     const residual = d.amortising
-      ? balanceAfter(d.outstanding, d.annualRatePct, d.remainingMonths ?? 60, m)
+      ? balanceAfter(
+          d.outstanding,
+          d.annualRatePct,
+          d.remainingMonths ?? (EXISTING_LOAN_ASSUMED_REMAINING_MONTHS as number),
+          m,
+        )
       : d.outstanding
     return sum + paid + residual
   }, 0)
@@ -167,6 +182,18 @@ export function assessRefinance(
   }
 
   constraints.push('high_cost_debt_present')
+
+  // REF-14 - an assumed term is an assumption, and DEF-21 says no assumption
+  // reaches a number without reaching the borrower too.
+  const assumedTerm = debts.find((d) => d.assumedRemainingTerm)
+  if (assumedTerm) {
+    reasons.push(
+      reason(
+        `You have not said how long is left on your existing loan, so we have worked on about ${monthsText(EXISTING_LOAN_ASSUMED_REMAINING_MONTHS as number)} remaining. Telling us the real figure changes whether switching is worth it.`,
+        ['existingLoanRemainingTenure'],
+      ),
+    )
+  }
 
   const candidateOutstanding = candidates.reduce((s, d) => s + d.outstanding, 0)
   const candidateMonthly = candidates.reduce((s, d) => s + d.monthlyService, 0)

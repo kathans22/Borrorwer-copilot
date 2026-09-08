@@ -22,7 +22,7 @@
  * property is never asked what it is worth.
  */
 
-import type { OutputId } from '../rules/rules.config'
+import { ASK_ABOUT_COLLATERAL_ABOVE_INR, type OutputId } from '../rules/rules.config'
 import type { AnswerFieldId, BorrowerAnswers, EmploymentType, LoanPurpose, ProductType } from '../types'
 import { readChoice, readNumeric } from '../engine/resolve'
 
@@ -121,7 +121,7 @@ export const applies = {
     const e = employment(a)
     if (e === 'self_employed_cash' || e === 'self_employed_documented') return true
     const wanted = amountOf(a, 'requestedAmount')
-    return wanted !== null && wanted > 500_000
+    return wanted !== null && wanted > (ASK_ABOUT_COLLATERAL_ABOVE_INR as number)
   },
 
   /** The follow-ups only apply once a property is on the table. */
