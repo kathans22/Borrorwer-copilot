@@ -434,6 +434,8 @@ export type ProductRules = {
   ticketSizeInr: Band<Rupees>
   /** Minimum recognised (lender-view) income to be considered at all. */
   minRecognisedIncomeInrPerMonth: RupeesPerMonth
+  /** How long the business must have been trading. Null where it does not apply. */
+  minTradingHistoryMonths: Months | null
   /** Conditions that must hold before the product can be offered. */
   preconditions: string[]
 }
@@ -458,6 +460,7 @@ export const PRODUCTS: Record<SupportedProduct, ProductRules> = {
     otherChargesInr: { low: inr(0), high: inr(2_000) },
     ticketSizeInr: { low: inr(25_000), high: inr(2_500_000) },
     minRecognisedIncomeInrPerMonth: inrPerMonth(15_000),
+    minTradingHistoryMonths: null,
     preconditions: [
       'Recognised income at or above the product floor',
       'No current overdue on any existing credit (CRD-12)',
@@ -476,6 +479,7 @@ export const PRODUCTS: Record<SupportedProduct, ProductRules> = {
     otherChargesInr: { low: inr(5_000), high: inr(15_000) },
     ticketSizeInr: { low: inr(300_000), high: inr(50_000_000) },
     minRecognisedIncomeInrPerMonth: inrPerMonth(20_000),
+    minTradingHistoryMonths: null,
     preconditions: [
       'No existing loan already secured on the property',
       'Clear ownership papers in your name, or a co-applicant name',
@@ -495,6 +499,7 @@ export const PRODUCTS: Record<SupportedProduct, ProductRules> = {
     otherChargesInr: { low: inr(0), high: inr(3_000) },
     ticketSizeInr: { low: inr(50_000), high: inr(5_000_000) },
     minRecognisedIncomeInrPerMonth: inrPerMonth(25_000),
+    minTradingHistoryMonths: months(24),
     preconditions: [
       'Trading for at least 24 months',
       'ITR or GST returns for at least one completed year',
@@ -513,6 +518,7 @@ export const PRODUCTS: Record<SupportedProduct, ProductRules> = {
     otherChargesInr: { low: inr(1_000), high: inr(3_000) },
     ticketSizeInr: { low: inr(30_000), high: inr(300_000) },
     minRecognisedIncomeInrPerMonth: inrPerMonth(10_000),
+    minTradingHistoryMonths: null,
     preconditions: [
       'A deposit covering whatever the loan will not',
       'Vehicle is a new purchase from a registered dealer',

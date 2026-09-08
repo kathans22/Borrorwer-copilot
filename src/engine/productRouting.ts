@@ -105,12 +105,12 @@ function precondition(
     }
   }
 
-  if (product === 'business_unsecured') {
+  const requiredMonths = PRODUCTS[product].minTradingHistoryMonths
+  if (requiredMonths !== null) {
     const vintage = readNumeric(answers, 'timeInCurrentWork', 'income')
-    const requiredMonths = 24
-    if (vintage?.stated && vintage.underwriting < requiredMonths) {
+    if (vintage?.stated && vintage.underwriting < (requiredMonths as number)) {
       return {
-        text: `A business loan needs at least ${requiredMonths} months of trading history and you have ${Math.round(vintage.underwriting)}.`,
+        text: `${Label(product)} needs at least ${requiredMonths as number} months of trading history and you have ${Math.round(vintage.underwriting)}.`,
         drivenBy: ['timeInCurrentWork'],
       }
     }
