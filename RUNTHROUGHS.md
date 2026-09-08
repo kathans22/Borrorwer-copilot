@@ -102,7 +102,8 @@ Rate offered: **11% – 24%** a year · credit tier: `unknown`
 All-in cost including fees: **13% – 28.6%** · confidence: low
 
 - Your rate could be anywhere from 11% to 24% — a 13% spread — because nobody has looked at your credit score yet. That band is wide because it covers every possibility, not because your credit is poor.
-- The all-in cost is 13% to 28.6%, higher than the headline rate: a 2% processing fee of ₹10,111 plus ₹2,180 GST and ₹2,000 of other charges is taken out before the money reaches you. Borrow ₹5,05,529 and you would actually receive ₹4,91,238, while paying interest on the whole ₹5,05,529.
+- Borrow ₹5,05,529 and you would actually receive ₹4,91,238. The rest is fees, taken out before the money reaches you.
+- You still pay interest on the whole ₹5,05,529. That is why the real cost is 13% to 28.6% rather than the rate on the poster.
 
 ### O4 — What can I pay monthly?
 
@@ -285,7 +286,8 @@ Rate offered: **13% – 15%** a year · credit tier: `near_prime`
 All-in cost including fees: **15.2% – 17.6%** · confidence: high
 
 - Your rate lands between 13% to 15%: this product starts at 9% and your credit standing adds 2% to 4.5%.
-- The all-in cost is 15.2% to 17.6%, higher than the headline rate: a 2.5% processing fee of ₹14,549 plus ₹5,319 GST and ₹15,000 of other charges is taken out before the money reaches you. Borrow ₹5,81,945 and you would actually receive ₹5,47,077, while paying interest on the whole ₹5,81,945.
+- Borrow ₹5,81,945 and you would actually receive ₹5,47,077. The rest is fees, taken out before the money reaches you.
+- You still pay interest on the whole ₹5,81,945. That is why the real cost is 15.2% to 17.6% rather than the rate on the poster.
 
 ### O4 — What can I pay monthly?
 
@@ -455,7 +457,8 @@ All-in cost including fees: **21.8% – 29.6%** · confidence: medium
 
 - Your rate lands between 17.5% to 22%: this product starts at 9.5% and your credit standing adds 3% to 9%.
 - A further 1% is added for recent missed payments, and it comes off after 6 clean months.
-- The all-in cost is 22.8% to 28.5%, higher than the headline rate: a 2% processing fee of ₹2,200 plus ₹936 GST and ₹3,000 of other charges is taken out before the money reaches you. Borrow ₹1,10,000 and you would actually receive ₹1,03,864, while paying interest on the whole ₹1,10,000.
+- Borrow ₹1,10,000 and you would actually receive ₹1,03,864. The rest is fees, taken out before the money reaches you.
+- You still pay interest on the whole ₹1,10,000. That is why the real cost is 22.8% to 28.5% rather than the rate on the poster.
 
 ### O4 — What can I pay monthly?
 

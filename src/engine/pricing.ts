@@ -202,7 +202,13 @@ export function priceProduct(
 
   reasons.push(
     reason(
-      `The all-in cost is ${rateBandText(aprBand.low, aprBand.high)}, higher than the headline rate: a ${percent(processingFeePct)} processing fee of ${rupees(processingFeeAmount)} plus ${rupees(gstOnFees)} GST${otherCharges > 0 ? ` and ${rupees(otherCharges)} of other charges` : ''} is taken out before the money reaches you. Borrow ${rupees(principal)} and you would actually receive ${rupees(netDisbursal)}, while paying interest on the whole ${rupees(principal)}.`,
+      `Borrow ${rupees(principal)} and you would actually receive ${rupees(netDisbursal)}. The rest is fees, taken out before the money reaches you.`,
+      ['quotedProcessingFee', 'requestedAmount'],
+    ),
+  )
+  reasons.push(
+    reason(
+      `You still pay interest on the whole ${rupees(principal)}. That is why the real cost is ${rateBandText(aprBand.low, aprBand.high)} rather than the rate on the poster.`,
       ['quotedProcessingFee', 'requestedAmount'],
     ),
   )
