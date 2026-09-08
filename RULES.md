@@ -475,6 +475,26 @@ not a weakness to be hidden.
 
 ---
 
+## Changing a rule live
+
+Three changes, each timed, each a single line in
+[`src/rules/rules.config.ts`](src/rules/rules.config.ts). No component was
+touched in any of them, and all three were reverted afterwards so the numbers
+in [RUNTHROUGHS.md](RUNTHROUGHS.md) match the committed rules.
+
+| Change | Line | Time | What moved |
+|---|---|---|---|
+| **AFF-01** — drop the FOIR cap from 50% to 45% | `foirRatio: ratio(0.5)` → `ratio(0.45)` | 3s | Priya's lender ceiling ₹12,700 → ₹11,300, her amount range ₹3,37,294–₹6,09,698 → ₹2,92,421–₹4,49,801, and the reason text rewrote itself: *"50% of the ₹28,000 they recognise"* → *"45% of the ₹28,000"*. The card's all-in figure moved with it. |
+| **PRD-05** — LAP LTV on commercial property from 60% to 50% | `commercial: { high: ratio(0.6) }` → `ratio(0.5)` | 2s | Nothing, for Ravi — and that is the correct answer. His LAP is limited by his recognised income (₹5,81,945), not by his shop (₹40 lakh at 50% is still ₹20 lakh). Forcing the LTV to 10% moved his ceiling to ₹4,00,000 and fired the AFF-17 reason, which proves the value is live rather than decorative. |
+| **CRD-10** — make one bounce a hard block rather than a rate penalty | `unsecuredAvailable: true` → `false` | 1s | Anita loses both unsecured products, each with its own exclusion reason on screen: *"A personal loan is closed to you at present, because unsecured lending is not realistically available on your current credit record."* Her vehicle loan survives, because it is secured. |
+
+The second one is the interesting result. A rule can be correctly wired and
+still not move a particular borrower's number, because something else binds
+first — and the honest thing is to say which, not to pick a borrower where the
+change happens to show.
+
+---
+
 ## Honest limits
 
 - **Market numbers are not sourced.** Every rate band, LTV, fee range and
