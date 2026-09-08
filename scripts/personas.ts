@@ -500,9 +500,15 @@ function snapshot(answers: BorrowerAnswers): Snapshot {
     verdictReasons: result.verdict.reasons.map((r) => r.text).join('|'),
     bands: {
       verdict: [0, 0],
+      // Both halves of O2. Watching only the safe figure misses a question
+      // that moves the lender figure - and for a borrower whose safe band is
+      // clipped flat by the product ceiling, the safe figure is a constant and
+      // the test would report every question as inert.
       maxAmount: [
-        result.maxAmount.borrowerSafe.band.low as number,
-        result.maxAmount.borrowerSafe.band.high as number,
+        (result.maxAmount.borrowerSafe.band.low as number) +
+          (result.maxAmount.lenderLikely.band.low as number),
+        (result.maxAmount.borrowerSafe.band.high as number) +
+          (result.maxAmount.lenderLikely.band.high as number),
       ],
       fairRate: [result.fairRate.band.low as number, result.fairRate.band.high as number],
       emiCeiling: [
